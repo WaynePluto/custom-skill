@@ -122,10 +122,36 @@ style: 删除调试日志
    git log --oneline -5
    ```
 
-3. **创建 commit**
+4. **创建 commit**
+
+   根据当前 Shell 选择写法。**PowerShell 7（pwsh）不支持 bash 的 HEREDOC**，出现 `<<` 会报 `ParserError: Missing file specification after redirection operator`。
+
+   **PowerShell 7（pi 默认 Shell，推荐）**
+
+   多个 `-m` 拼接，每个 `-m` 为一段，git 自动用空行分隔；body 用内联 here-string 实现多行：
+
+   ```powershell
+   git commit -m "feat: 添加功能描述" -m @"
+   - 详细说明 1
+   - 详细说明 2
+   "@
+   ```
+
+   也可把整段 message 放进一个 here-string 变量（与 bash HEREDOC 等价）：
+
+   ```powershell
+   $msg = @"
+   feat: 添加功能描述
+
+   - 详细说明 1
+   - 详细说明 2
+   "@
+   git commit -m $msg
+   ```
+
+   **Bash（其他 Shell 环境）**
 
    ```bash
-   # 使用 HEREDOC 确保格式正确
    git commit -m "$(cat <<'EOF'
    feat: 添加功能描述
 
@@ -136,7 +162,9 @@ style: 删除调试日志
    )"
    ```
 
-4. **确认 commit**
+   > 注意：pwsh here-string 的结束标记 `"@` 必须顶格写在行首，前面不能有任何空格。
+
+5. **确认 commit**
    ```bash
    git log -1 --pretty=fuller
    ```
@@ -152,10 +180,24 @@ style: 删除调试日志
 
 ### 示例
 
-```bash
+PowerShell 7（pi 默认 Shell）：
+
+```powershell
 # 简单改动
 git commit -m "fix: 修复按钮点击无响应"
 
+# 复杂改动
+git commit -m "refactor: 重构暂停菜单为游戏内弹窗" -m @"
+- 新增 PauseManager 管理暂停弹窗
+- 修改 GameScene 集成暂停功能
+- 从调试面板移除暂停场景
+- 删除不必要的 resume 参数传递逻辑
+"@
+```
+
+Bash（其他 Shell 环境）：
+
+```bash
 # 复杂改动
 git commit -m "$(cat <<'EOF'
 refactor: 重构暂停菜单为游戏内弹窗
@@ -172,6 +214,7 @@ EOF
 ## 注意事项
 
 - ❌ 不要使用 `git commit -am`（容易误添加不该提交的文件）
+- ❌ PowerShell 7 中不要使用 bash 的 HEREDOC（`$(cat <<'EOF' ... EOF)`），会触发 `ParserError`；多行 message 改用多个 `-m` 或 here-string（见“创建 commit”）
 - ❌ 不要使用不符合规范的 commit message
 - ❌ 不要修改除了格式化以外的业务功能代码。如果提交被异常中断（比如编译失败），请你把问题列出来告诉用户，同时本次任务不提交代码。
 - ✅ 每次提交前使用 `git status` 确认改动
