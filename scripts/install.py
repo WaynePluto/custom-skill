@@ -2,6 +2,8 @@
 """构建并安装技能、prompts 和扩展到全局目录。"""
 
 import argparse
+import json
+import os
 import shutil
 import subprocess
 import sys
@@ -61,6 +63,73 @@ def deploy_prompts(pi_agent_dir: Path, force: bool) -> None:
             continue
         shutil.copy2(src, dest)
         print(f"  {src.name} → {dest}")
+
+
+# ── Shell ──
+
+def detect_pwsh() -> str | None:
+    """检测 PowerShell 7（pwsh）可执行文件路径，找不到返回 None。"""
+    found = shutil.which("pwsh") or shutil.which("pwsh.exe")
+
+    if not found:
+        # 常见安装位置兜底（仅用系统标准变量，不读取自定义 shell 偏好）
+        candidates = [
+            Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "PowerShell" / "7" / "pwsh.exe",
+            Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "PowerShell" / "7" / "pwsh.exe",
+        ]
+        for c in candidates:
+            if c.exists():
+                found = str(c)
+                break
+
+    if not found:
+        return None
+
+    # 归一化扩展名为小写 .exe（shutil.which 在 Windows 上可能返回大写 .EXE）
+    root, ext = os.path.splitext(found)
+    return root + ext.lower() if ext else found
+
+
+def configure_shell(pi_agent_dir: Path, force: bool) -> None:
+    """在 Windows 上将 settings.json 的 shellPath 指向 PowerShell 7。
+
+    prompts/APPEND_SYSTEM.md 假定工具 shell 是 pwsh；此处确保安装后实际 shell 与之一致。
+    采用合并写法：只设置 shellPath 键，保留用户已有的其它配置。
+    """
+    if sys.platform != "win32":
+        return
+
+    print(f"\n{'═' * 4} shell {'═' * 4}")
+
+    pwsh = detect_pwsh()
+    if not pwsh:
+        print("  跳过：未检测到 PowerShell 7（pwsh）。")
+        print("    提示：APPEND_SYSTEM.md 假定 pwsh 作为工具 shell；")
+        print("    请安装 PowerShell 7 后重跑，或手动在 settings.json 设置 shellPath。")
+        return
+
+    settings_path = pi_agent_dir / "settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if settings_path.exists():
+        try:
+            data = json.loads(settings_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            sys.exit(f"错误：{settings_path} 解析失败：{e}")
+        if not isinstance(data, dict):
+            sys.exit(f"错误：{settings_path} 顶层不是 JSON 对象，已跳过以避免破坏配置。")
+    else:
+        data = {}
+
+    existing = data.get("shellPath")
+    if existing and not force:
+        print(f"  跳过 shellPath（已存在：{existing}，使用 --force 覆盖）")
+        return
+
+    data["shellPath"] = pwsh
+    settings_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    action = "覆盖" if existing else "设置"
+    print(f"  {action} shellPath → {pwsh}")
 
 
 # ── Extensions ──
@@ -208,6 +277,8 @@ def main() -> None:
 
     if install_all or args.prompts:
         deploy_prompts(args.pi_agent_dir, args.force)
+        # APPEND_SYSTEM.md 假定工具 shell 为 pwsh，需同步配置 settings.json
+        configure_shell(args.pi_agent_dir, args.force)
 
     if install_all or args.extensions:
         deploy_extensions(args.pi_agent_dir, args.force)
