@@ -7,3 +7,7 @@
 package-lock.json
 pnpm-lock.yaml
 .vscode
+
+# Python
+__pycache__/
+*.pyc
