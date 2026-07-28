@@ -20,13 +20,10 @@ compatibility: Windows/macOS/Linux、Python 3.10+、Node.js 20+、Pi CLI，以�
 如果技能目录下不存在 `node_modules/playwright-core`，在技能目录执行：
 
 ```powershell
-npm install --ignore-scripts
-npm run build
+pnpm install --ignore-scripts
 ```
 
-`npm install` 安装运行时依赖（playwright-core、jsdom）和构建工具。`npm run build` 将 readability、turndown 等库打包到 `dist/`，减少部署体积。
-
-如需部署到全局 Skills 目录（不携带开发依赖）：
+如需部署到全局 Skills 目录：
 
 ```bash
 python '<技能目录>/scripts/deploy.py'
@@ -56,12 +53,6 @@ python '<技能目录>/scripts/run-search-subagent.py' --query '<完整搜索任
 ## 故障降级
 
 如果 `pi` 子进程不可用，当前 Agent 可以直接运行：
-
-```bash
-node '<技能目录>/dist/research.js' --query '<关键词>' --max-results 8 --read 3
-```
-
-如果 `dist/` 不存在（未构建），降级到源码：
 
 ```bash
 node '<技能目录>/scripts/research.mjs' --query '<关键词>' --max-results 8 --read 3

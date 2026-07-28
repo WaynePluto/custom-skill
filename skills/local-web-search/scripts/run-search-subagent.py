@@ -10,14 +10,6 @@ from pathlib import Path
 
 
 def find_scripts(scripts_dir: Path, skill_root: Path) -> dict[str, Path]:
-    """优先使用 dist/ 打包脚本，降级到源码。"""
-    dist_dir = skill_root / "dist"
-    if (dist_dir / "research.js").exists():
-        return {
-            "research": dist_dir / "research.js",
-            "search": dist_dir / "search-bing.js",
-            "read": dist_dir / "read-page.js",
-        }
     return {
         "research": scripts_dir / "research.mjs",
         "search": scripts_dir / "search-bing.mjs",
@@ -33,7 +25,7 @@ def check_prerequisites(skill_root: Path, research_script: Path) -> None:
     if not research_script.exists():
         sys.exit(f"错误：搜索脚本不存在：{research_script}")
     if not (skill_root / "node_modules" / "playwright-core").exists():
-        sys.exit(f"错误：技能依赖尚未安装。请先在 {skill_root} 执行：npm install --ignore-scripts")
+        sys.exit(f"错误：技能依赖尚未安装。请先在 {skill_root} 执行：pnpm install --ignore-scripts")
 
 
 def build_prompt(query: str, scripts: dict[str, Path]) -> str:

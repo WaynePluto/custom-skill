@@ -13,17 +13,10 @@
 
 ## 安装依赖
 
-```bash
-cd skills/local-web-search
-npm install --ignore-scripts
-```
-
-## 构建打包
-
-将 readability、turndown 等库打包到 `dist/`，运行时只需 playwright-core + jsdom：
+仓库根目录为 pnpm workspace，在仓库根或技能目录执行：
 
 ```bash
-npm run build
+pnpm install --ignore-scripts
 ```
 
 ## 部署到全局 Skills 目录
@@ -34,7 +27,7 @@ python scripts/deploy.py
 python scripts/deploy.py --destination /path/to/target/local-web-search
 ```
 
-部署后目标目录体积约 30 MB（主要是 playwright-core + jsdom），相比完整 node_modules 的 50 MB 减少 ~40%。
+部署内容为 SKILL.md + scripts/ + package.json，依赖通过 `pnpm install --prod` 从 pnpm store 硬链接，几乎不占额外磁盘。
 
 `playwright-core` 不会下载额外浏览器，直接使用本机 Chrome 或 Edge。
 
@@ -43,6 +36,8 @@ python scripts/deploy.py --destination /path/to/target/local-web-search
 ```bash
 npm run browser:check
 ```
+
+（脚本命令用 npm/pnpm 运行均可。）
 
 ## 最小搜索测试
 

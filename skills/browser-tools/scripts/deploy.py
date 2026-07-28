@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""把 local-web-search 技能部署到指定目录（默认 ~/.agents/skills/local-web-search）。
+"""把 browser-tools 技能部署到指定目录（默认 ~/.agents/skills/browser-tools）。
 
 复制 SKILL.md、scripts/、package.json，然后在目标目录执行
 pnpm install --prod（依赖从 pnpm store 硬链接，几乎不占额外磁盘）。
@@ -29,7 +29,7 @@ def dir_size_mb(path: Path) -> float:
 def main() -> None:
     skill_root = Path(__file__).resolve().parent.parent
 
-    parser = argparse.ArgumentParser(description="部署 local-web-search 技能")
+    parser = argparse.ArgumentParser(description="部署 browser-tools 技能")
     parser.add_argument(
         "--destination",
         type=Path,

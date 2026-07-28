@@ -1,6 +1,6 @@
 # custom-skills
 
-个人专用 Coding Agent Skills 集合，可被 Pi、Claude Code 等支持 Agent Skills 的工具复用。
+个人专用 Coding Agent Skills 集合，可被 Pi、OpenCode、GitHub Copilot（CLI）等支持从 `~/.agents/skills` 加载 Agent Skills 的工具复用。
 
 ## 前置要求
 
@@ -10,7 +10,7 @@
 
 ## 快速开始
 
-### 一键安装所有技能和 prompts
+### 一键安装所有技能、prompts 和扩展
 
 ```bash
 git clone https://github.com/<your-username>/custom-skills.git
@@ -21,6 +21,7 @@ python scripts/install.py
 脚本会自动完成：
 - 技能：依赖下载 → 构建打包 → 部署到 `~/.agents/skills/`
 - Prompts：将 `prompts/APPEND_SYSTEM.md` 部署到 `~/.pi/agent/`
+- 扩展：将 `extensions/` 下的 Pi 扩展部署到 `~/.pi/agent/extensions/`
 
 ### 只安装指定技能
 
@@ -34,16 +35,19 @@ python scripts/install.py --name local-web-search
 python scripts/install.py --force
 ```
 
-### 只更新 prompts（不安装技能）
+### 只安装指定类别
+
+不加选择参数时全部安装；加 `--skills`、`--prompts`、`--extensions` 则只安装对应类别（可组合）：
 
 ```bash
-python scripts/install.py --no-skills --force
-```
+# 只更新 prompts
+python scripts/install.py --prompts --force
 
-### 只安装技能（不更新 prompts）
+# 只安装技能
+python scripts/install.py --skills
 
-```bash
-python scripts/install.py --no-prompts
+# 只部署扩展
+python scripts/install.py --extensions --force
 ```
 
 ### 自定义安装目录
@@ -66,6 +70,8 @@ custom-skills/
 │   └── install.py            # 全局安装脚本
 ├── prompts/
 │   └── APPEND_SYSTEM.md     # Pi 系统提示词补充 → ~/.pi/agent/
+├── extensions/
+│   └── notify.ts            # Pi 扩展 → ~/.pi/agent/extensions/
 ├── skills/
 │   └── <skill-name>/
 │       ├── SKILL.md           # 技能定义（Agent 读取）

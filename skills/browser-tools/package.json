@@ -1,12 +1,11 @@
 {
-  "name": "local-web-search-skill",
+  "name": "browser-tools-skill",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Local Chrome/Edge web research scripts for an Agent Skill",
+  "description": "Interactive CDP browser automation scripts for an Agent Skill",
   "scripts": {
     "deploy": "python scripts/deploy.py",
-    "test": "node --test tests/*.test.mjs",
     "browser:check": "node scripts/browser-check.mjs"
   },
   "engines": {

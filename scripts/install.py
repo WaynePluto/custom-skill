@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""构建并安装技能和 prompts 到全局目录。"""
+"""构建并安装技能、prompts 和扩展到全局目录。"""
 
 import argparse
-import json
 import shutil
 import subprocess
 import sys
@@ -30,8 +29,8 @@ def check_prerequisites() -> None:
     if major < 20:
         sys.exit(f"错误：Node.js 版本过低：v{version}（要求 >= 20）。")
 
-    if not shutil.which("npm"):
-        sys.exit("错误：未找到 npm。请确认 Node.js 安装完整。")
+    if not shutil.which("pnpm"):
+        sys.exit("错误：未找到 pnpm。请先安装 pnpm（npm install -g pnpm）。")
 
 
 def dir_size_mb(path: Path) -> float:
@@ -64,25 +63,49 @@ def deploy_prompts(pi_agent_dir: Path, force: bool) -> None:
         print(f"  {src.name} → {dest}")
 
 
+# ── Extensions ──
+
+def deploy_extensions(pi_agent_dir: Path, force: bool) -> None:
+    """将 extensions/ 目录下的扩展部署到 Pi 扩展目录。"""
+    extensions_dir = REPO_ROOT / "extensions"
+    if not extensions_dir.exists():
+        return
+
+    ext_files = [p for p in extensions_dir.iterdir() if p.is_file() or p.is_dir()]
+    if not ext_files:
+        return
+
+    print(f"\n{'═' * 4} extensions {'═' * 4}")
+
+    dest_dir = pi_agent_dir / "extensions"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    for src in ext_files:
+        dest = dest_dir / src.name
+        if dest.exists() and not force:
+            print(f"  跳过 {src.name}（已存在，使用 --force 覆盖）")
+            continue
+        if src.is_dir():
+            if dest.exists():
+                shutil.rmtree(dest)
+            shutil.copytree(src, dest)
+        else:
+            shutil.copy2(src, dest)
+        print(f"  {src.name} → {dest}")
+
+
 # ── Skills ──
 
 def build_skill(skill_dir: Path) -> None:
-    """安装依赖并执行构建。"""
+    """在仓库根安装 workspace 依赖（幂等，只需一次）。"""
     pkg_path = skill_dir / "package.json"
     if not pkg_path.exists():
         return
 
     print("  安装依赖...")
-    r = run(["npm", "install", "--ignore-scripts"], cwd=skill_dir)
+    r = run(["pnpm", "install", "--ignore-scripts"], cwd=REPO_ROOT)
     if r.returncode != 0:
-        sys.exit(f"npm install 失败（退出码 {r.returncode}）")
-
-    pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
-    if pkg.get("scripts", {}).get("build"):
-        print("  构建打包...")
-        r = run(["npm", "run", "build"], cwd=skill_dir)
-        if r.returncode != 0:
-            sys.exit(f"npm run build 失败（退出码 {r.returncode}）")
+        sys.exit(f"pnpm install 失败（退出码 {r.returncode}）")
 
 
 def deploy_with_script(skill_dir: Path, destination: Path, force: bool) -> None:
@@ -115,12 +138,8 @@ def deploy_generic(skill_dir: Path, destination: Path, force: bool) -> None:
         else:
             shutil.copy2(item, dest_item)
 
-    dist_dir = skill_dir / "dist"
-    if dist_dir.exists():
-        shutil.copytree(dist_dir, destination / "dist")
-
     if (destination / "package.json").exists():
-        run(["npm", "install", "--omit=dev", "--ignore-scripts"], cwd=destination)
+        run(["pnpm", "install", "--prod", "--ignore-scripts", "--ignore-workspace"], cwd=destination)
 
     print(f"  部署完成（{dir_size_mb(destination):.1f} MB）")
 
@@ -162,7 +181,9 @@ def deploy_skills(skills_dir: Path, name: str | None, force: bool) -> None:
 # ── 入口 ──
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="构建并安装技能和 prompts")
+    parser = argparse.ArgumentParser(
+        description="构建并安装技能、prompts 和扩展（不加选择参数则全部安装）"
+    )
     parser.add_argument("--name", default=None, help="要安装的技能名称（省略则安装所有）")
     parser.add_argument(
         "--skills-dir", type=Path,
@@ -175,16 +196,23 @@ def main() -> None:
         help="Pi agent 配置目录路径",
     )
     parser.add_argument("--force", action="store_true", help="覆盖已存在的文件")
-    parser.add_argument("--no-skills", action="store_true", help="跳过技能安装")
-    parser.add_argument("--no-prompts", action="store_true", help="跳过 prompts 部署")
+    parser.add_argument("--skills", action="store_true", help="安装技能")
+    parser.add_argument("--prompts", action="store_true", help="部署 prompts")
+    parser.add_argument("--extensions", action="store_true", help="部署扩展")
     args = parser.parse_args()
+
+    # 不加选择参数时全部安装
+    install_all = not (args.skills or args.prompts or args.extensions)
 
     check_prerequisites()
 
-    if not args.no_prompts:
+    if install_all or args.prompts:
         deploy_prompts(args.pi_agent_dir, args.force)
 
-    if not args.no_skills:
+    if install_all or args.extensions:
+        deploy_extensions(args.pi_agent_dir, args.force)
+
+    if install_all or args.skills:
         deploy_skills(args.skills_dir, args.name, args.force)
 
     print("\n全部完成。")
