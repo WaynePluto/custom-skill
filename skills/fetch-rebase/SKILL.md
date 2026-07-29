@@ -20,7 +20,7 @@ compatibility: Windows/macOS/Linux、Git 2.0+。
 
 ### 1. 前置检查
 
-```powershell
+```shell
 git rev-parse --is-inside-work-tree
 ```
 
@@ -28,13 +28,13 @@ git rev-parse --is-inside-work-tree
 
 ### 2. 获取当前分支和上游信息
 
-```powershell
+```shell
 git branch --show-current
 ```
 
 如果处于 detached HEAD 状态（输出为空），告知用户并停止。
 
-```powershell
+```shell
 git rev-parse --abbrev-ref '@{upstream}'
 ```
 
@@ -42,7 +42,7 @@ git rev-parse --abbrev-ref '@{upstream}'
 
 ### 3. 检查工作区状态
 
-```powershell
+```shell
 git status --porcelain
 ```
 
@@ -52,13 +52,13 @@ git status --porcelain
 
 从上游信息中提取 remote 名称（`/` 之前的部分），然后 fetch：
 
-```powershell
+```shell
 git fetch <remote>
 ```
 
 ### 5. Rebase
 
-```powershell
+```shell
 git rebase '@{upstream}'
 ```
 
@@ -69,7 +69,7 @@ git rebase '@{upstream}'
 
 如果第 3 步执行了 stash 且 rebase 成功（无冲突）：
 
-```powershell
+```shell
 git stash pop
 ```
 

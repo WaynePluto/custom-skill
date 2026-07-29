@@ -14,13 +14,13 @@ compatibility: Windows/macOS/Linux、Node.js 20+，以及本机安装的 Chrome 
 
 如果技能目录下不存在 `node_modules/playwright-core`，在技能目录执行：
 
-```powershell
+```shell
 pnpm install --ignore-scripts
 ```
 
 如需部署到全局 Skills 目录：
 
-```bash
+```shell
 python '<技能目录>/scripts/deploy.py'
 ```
 
@@ -28,7 +28,7 @@ python '<技能目录>/scripts/deploy.py'
 
 ## 启动浏览器
 
-```bash
+```shell
 node {scripts}/browser-start.mjs
 ```
 
@@ -36,14 +36,14 @@ node {scripts}/browser-start.mjs
 
 ## 导航
 
-```bash
+```shell
 node {scripts}/browser-nav.mjs https://example.com          # 当前标签页
 node {scripts}/browser-nav.mjs https://example.com --new    # 新标签页
 ```
 
 ## 执行 JavaScript
 
-```bash
+```shell
 node {scripts}/browser-eval.mjs 'document.title'
 ```
 
@@ -51,7 +51,7 @@ node {scripts}/browser-eval.mjs 'document.title'
 
 ## 截图
 
-```bash
+```shell
 node {scripts}/browser-screenshot.mjs
 ```
 
@@ -59,7 +59,7 @@ node {scripts}/browser-screenshot.mjs
 
 ## 交互式选取元素
 
-```bash
+```shell
 node {scripts}/browser-pick.mjs "Click the submit button"
 ```
 
@@ -67,7 +67,7 @@ node {scripts}/browser-pick.mjs "Click the submit button"
 
 ## Cookies
 
-```bash
+```shell
 node {scripts}/browser-cookies.mjs
 ```
 
@@ -75,7 +75,7 @@ node {scripts}/browser-cookies.mjs
 
 ## 提取正文
 
-```bash
+```shell
 node {scripts}/browser-content.mjs https://example.com
 ```
 
@@ -83,7 +83,7 @@ node {scripts}/browser-content.mjs https://example.com
 
 ## 诊断
 
-```bash
+```shell
 node {scripts}/browser-check.mjs
 ```
 
@@ -156,7 +156,7 @@ Array.from(document.querySelectorAll('button, input, [role="button"]')).map(e =>
 
 DOM 在操作后才更新时，加短暂延迟：
 
-```powershell
+```shell
 Start-Sleep -Milliseconds 500; node {scripts}/browser-eval.mjs '...'
 ```
 

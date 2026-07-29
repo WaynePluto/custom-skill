@@ -19,13 +19,13 @@ compatibility: Windows/macOS/Linux、Python 3.10+、Node.js 20+、Pi CLI，以�
 
 如果技能目录下不存在 `node_modules/playwright-core`，在技能目录执行：
 
-```powershell
+```shell
 pnpm install --ignore-scripts
 ```
 
 如需部署到全局 Skills 目录：
 
-```bash
+```shell
 python '<技能目录>/scripts/deploy.py'
 ```
 
@@ -35,7 +35,7 @@ python '<技能目录>/scripts/deploy.py'
 
 解析本技能所在目录，然后执行：
 
-```bash
+```shell
 python '<技能目录>/scripts/run-search-subagent.py' --query '<完整搜索任务>'
 ```
 
@@ -54,7 +54,7 @@ python '<技能目录>/scripts/run-search-subagent.py' --query '<完整搜索任
 
 如果 `pi` 子进程不可用，当前 Agent 可以直接运行：
 
-```bash
+```shell
 node '<技能目录>/scripts/research.mjs' --query '<关键词>' --max-results 8 --read 3
 ```
 

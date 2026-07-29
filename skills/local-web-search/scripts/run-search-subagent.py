@@ -38,7 +38,7 @@ def build_prompt(query: str, scripts: dict[str, Path]) -> str:
 
 ## 可用脚本
 
-使用 bash 调用以下本地浏览器采集脚本：
+使用 `bash` 工具（即 pi 的 Shell 工具，实际在 PowerShell 7 下运行）调用以下本地浏览器采集脚本：
 
 ### 综合搜索（搜索 + 批量阅读）
 

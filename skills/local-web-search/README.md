@@ -15,13 +15,13 @@
 
 仓库根目录为 pnpm workspace，在仓库根或技能目录执行：
 
-```bash
+```shell
 pnpm install --ignore-scripts
 ```
 
 ## 部署到全局 Skills 目录
 
-```bash
+```shell
 python scripts/deploy.py
 # 或指定目标路径：
 python scripts/deploy.py --destination /path/to/target/local-web-search
@@ -33,7 +33,7 @@ python scripts/deploy.py --destination /path/to/target/local-web-search
 
 ## 浏览器诊断
 
-```bash
+```shell
 npm run browser:check
 ```
 
@@ -41,19 +41,19 @@ npm run browser:check
 
 ## 最小搜索测试
 
-```bash
+```shell
 node scripts/search-bing.mjs --query "Microsoft official site" --max-results 3
 ```
 
 ## 完整采集测试
 
-```bash
+```shell
 node scripts/research.mjs --query "Node.js latest LTS official" --max-results 5 --read 2
 ```
 
 ## 启动搜索子 Agent
 
-```bash
+```shell
 python scripts/run-search-subagent.py --query "Node.js 当前最新 LTS 版本是什么？请引用官方来源"
 ```
 
