@@ -162,6 +162,7 @@ style: 删除调试日志
 
    > 注意：pwsh here-string 的结束标记 `"@` 必须顶格写在行首，前面不能有任何空格。
    > 不要使用 bash 的 HEREDOC（`$(cat <<'EOF' ... EOF)`）：pwsh 不支持 `<<`，会报 `ParserError: Missing file specification after redirection operator`。
+   > 扩展 here-string `@"..."@` 会解释反引号和 `$`：body 中若含行内代码 `\`xxx`\`` 或 `$variable` 会被吞掉或替换。需保留字面量时改用字面 here-string `@'...'@`（不展开任何内容），或在 body 中避免使用反引号。
 
 5. **确认 commit**
    ```shell
@@ -196,6 +197,7 @@ git commit -m "refactor: 重构暂停菜单为游戏内弹窗" -m @"
 
 - ❌ 不要使用 `git commit -am`（容易误添加不该提交的文件）
 - ❌ PowerShell 7 中不要使用 bash 的 HEREDOC（`$(cat <<'EOF' ... EOF)`），会触发 `ParserError`；多行 message 改用多个 `-m` 或 here-string（见“创建 commit”）
+- ❌ 扩展 here-string `@"..."@` 中的反引号和 `$` 会被转义/展开，导致 commit message body 乱码。需保留字面量（如行内代码 `\`xxx`\``）时改用字面 here-string `@'...'@`，或避免在 body 中使用反引号
 - ❌ 不要使用不符合规范的 commit message
 - ❌ 不要修改除了格式化以外的业务功能代码。如果提交被异常中断（比如编译失败），请你把问题列出来告诉用户，同时本次任务不提交代码。
 - ✅ 每次提交前使用 `git status` 确认改动
