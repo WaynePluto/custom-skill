@@ -7,12 +7,13 @@
 - **Python >= 3.10**
 - **Node.js >= 20**（部分技能需要）
 - **本机安装的 Chrome 或 Edge**（浏览器类技能需要）
+- **Windows + PowerShell 7（pwsh）**：项目中的脚本、SKILL 命令示例和 prompts 默认面向 Windows 上的 PowerShell 7 编写，Shell 命令使用 pwsh 7 语法；在其他 OS / Shell 下使用时需自行改写相应命令
 
 ## 快速开始
 
 ### 一键安装所有技能、prompts 和扩展
 
-```bash
+```shell
 git clone https://github.com/<your-username>/custom-skills.git
 cd custom-skills
 python scripts/install.py
@@ -25,13 +26,13 @@ python scripts/install.py
 
 ### 只安装指定技能
 
-```bash
+```shell
 python scripts/install.py --name local-web-search
 ```
 
 ### 覆盖已安装的技能
 
-```bash
+```shell
 python scripts/install.py --force
 ```
 
@@ -39,7 +40,7 @@ python scripts/install.py --force
 
 不加选择参数时全部安装；加 `--skills`、`--prompts`、`--extensions` 则只安装对应类别（可组合）：
 
-```bash
+```shell
 # 只更新 prompts
 python scripts/install.py --prompts --force
 
@@ -52,7 +53,7 @@ python scripts/install.py --extensions --force
 
 ### 自定义安装目录
 
-```bash
+```shell
 python scripts/install.py --skills-dir /path/to/skills --pi-agent-dir /path/to/pi/agent
 ```
 
@@ -107,7 +108,7 @@ custom-skills/
 
 如果只想构建而不部署到全局目录：
 
-```bash
+```shell
 cd skills/local-web-search
 npm install --ignore-scripts
 npm run build
