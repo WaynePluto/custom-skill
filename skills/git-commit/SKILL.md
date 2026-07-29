@@ -90,20 +90,35 @@ style: 删除调试日志
 
 1. **查看改动**
 
-   ```bash
+   ```shell
    git status
    git diff
    ```
 
-2. **分批次提交**
+2. **按逻辑变更提交**
 
-   **默认行为**：提交项目里的全部内容，但按逻辑分批次提交多个 commit。
+   **默认行为**：以「逻辑变更」为单位提交，一个 commit 对应一个可独立理解的目的，而不是按「文件数量」或「批次」机械拆分。注意到 agent 一次任务常改动大量文件，因此需先判断本次改动包含几个逻辑目的，据此决定一个还是多个 commit。
 
-   - 每个 commit 只包含一个逻辑变更（如：一个模块的重构、一个新功能、一个 bug 修复）
-   - 每个 commit 都是完整的、可独立理解的
-   - 不要把所有改动混在一个 commit 里
+   **判为同一个逻辑变更 → 合并为单个 commit**：
 
-   ```bash
+   - 所有改动服务于同一目的（如"把全项目 `console.log` 换成 logger"，即使涉及几十个文件）
+   - 某个改动离开后续 commit 就无意义（如为新功能做的准备性重构），强行拆开会导致不可独立理解
+   - 改动本身就是单一、内聚的任务，无法在一条 commit message 里再细分出独立目的
+
+   **判为多个逻辑变更 → 拆成多个 commit**：
+
+   - 改动包含明显独立的目的（重构 + 新功能 + 配置调整 + bug 修复混在一起）
+   - 某一部分未来可能需要单独 `revert` / review / bisect
+   - 体量大到无法用一条 commit message 说清楚在做什么
+
+   > 反例：把多个不相关的改动混进一个 commit，导致历史难以回退和审查。**禁止的是「把不相关改动混作一团」，而不是「一次提交大量文件」**——服务于同一目的的大改动合并提交是正确的。
+
+   ```shell
+   # 单一逻辑变更：虽然改动很多文件，仍是一个 commit
+   git add -A
+   git commit -m "refactor: 全项目日志改用 logger"
+
+   # 多个逻辑变更：按目的分多个 commit
    # 第一批：重构相关的文件
    git add path/to/refactored/files
    git commit -m "refactor: 重构 XXX 模块"
@@ -118,28 +133,24 @@ style: 删除调试日志
    ```
 
 3. **确认 commit**
-   ```bash
+   ```shell
    git log --oneline -5
    ```
 
 4. **创建 commit**
 
-   根据当前 Shell 选择写法。**PowerShell 7（pwsh）不支持 bash 的 HEREDOC**，出现 `<<` 会报 `ParserError: Missing file specification after redirection operator`。
+   **PowerShell 7（pi 默认 Shell）**：多个 `-m` 拼接，每个 `-m` 为一段，git 自动用空行分隔；body 用内联 here-string 实现多行：
 
-   **PowerShell 7（pi 默认 Shell，推荐）**
-
-   多个 `-m` 拼接，每个 `-m` 为一段，git 自动用空行分隔；body 用内联 here-string 实现多行：
-
-   ```powershell
+   ```shell
    git commit -m "feat: 添加功能描述" -m @"
    - 详细说明 1
    - 详细说明 2
    "@
    ```
 
-   也可把整段 message 放进一个 here-string 变量（与 bash HEREDOC 等价）：
+   也可把整段 message 放进一个 here-string 变量：
 
-   ```powershell
+   ```shell
    $msg = @"
    feat: 添加功能描述
 
@@ -149,23 +160,11 @@ style: 删除调试日志
    git commit -m $msg
    ```
 
-   **Bash（其他 Shell 环境）**
-
-   ```bash
-   git commit -m "$(cat <<'EOF'
-   feat: 添加功能描述
-
-   - 详细说明 1
-   - 详细说明 2
-
-   EOF
-   )"
-   ```
-
    > 注意：pwsh here-string 的结束标记 `"@` 必须顶格写在行首，前面不能有任何空格。
+   > 不要使用 bash 的 HEREDOC（`$(cat <<'EOF' ... EOF)`）：pwsh 不支持 `<<`，会报 `ParserError: Missing file specification after redirection operator`。
 
 5. **确认 commit**
-   ```bash
+   ```shell
    git log -1 --pretty=fuller
    ```
 
@@ -180,9 +179,7 @@ style: 删除调试日志
 
 ### 示例
 
-PowerShell 7（pi 默认 Shell）：
-
-```powershell
+```shell
 # 简单改动
 git commit -m "fix: 修复按钮点击无响应"
 
@@ -193,22 +190,6 @@ git commit -m "refactor: 重构暂停菜单为游戏内弹窗" -m @"
 - 从调试面板移除暂停场景
 - 删除不必要的 resume 参数传递逻辑
 "@
-```
-
-Bash（其他 Shell 环境）：
-
-```bash
-# 复杂改动
-git commit -m "$(cat <<'EOF'
-refactor: 重构暂停菜单为游戏内弹窗
-
-- 新增 PauseManager 管理暂停弹窗
-- 修改 GameScene 集成暂停功能
-- 从调试面板移除暂停场景
-- 删除不必要的 resume 参数传递逻辑
-
-EOF
-)"
 ```
 
 ## 注意事项
