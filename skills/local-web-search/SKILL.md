@@ -6,7 +6,7 @@ compatibility: Windows/macOS/Linux、Python 3.10+、Node.js 20+、Pi CLI，以�
 
 # 本地浏览器网络搜索
 
-通过独立的 `pi --print` 子进程完成搜索，让原始搜索结果和网页正文留在隔离上下文中，只把结论与来源带回主对话。
+通过隔离的子 Agent 完成搜索，让原始搜索结果和网页正文留在隔离上下文中，只把结论与来源带回主对话。优先使用当前 Agent 的 `subagent` 工具；没有该工具时降级为独立的 `pi --print` 子进程。
 
 ## 使用原则
 
@@ -33,15 +33,29 @@ python '<技能目录>/scripts/deploy.py'
 
 ## 执行搜索
 
-解析本技能所在目录，然后执行：
+解析本技能所在目录，把完整搜索任务交给隔离的子 Agent 执行。子 Agent 不加载 Skills 和项目上下文，避免再次加载本技能并递归启动；不要在主 Agent 中重复抓取同一批网页。
+
+按以下顺序选择执行方式：
+
+### 方式一：subagent 工具（优先）
+
+如果当前 Agent 的工具列表中存在 `subagent` 工具，优先使用它，而不是 Pi CLI：
+
+```shell
+python '<技能目录>/scripts/run-search-subagent.py' --query '<完整搜索任务>' --print-prompt
+```
+
+把脚本输出（即子 Agent 任务文本，含脚本路径、预算限制与研究规则）完整作为 `subagent` 工具的 `task` 参数传入。如果用户明确指定子 Agent 的 model 且当前 subagent 工具支持，按工具支持的参数传入；不要擅自替用户选择付费更高的模型。
+
+### 方式二：Pi CLI（无 subagent 工具时）
+
+没有 `subagent` 工具时，先检测 `pi` CLI 是否可用，然后执行：
 
 ```shell
 python '<技能目录>/scripts/run-search-subagent.py' --query '<完整搜索任务>'
 ```
 
-如果用户明确指定子 Agent 的 provider 或 model，再分别传入 `--provider` 和 `--model`。不要擅自替用户选择付费更高的模型。
-
-子进程会禁用 Skills 和项目上下文，避免再次加载本技能并递归启动 Pi。不要在主 Agent 中重复抓取同一批网页。
+如果用户明确指定子 Agent 的 provider 或 model，再分别传入 `--provider` 和 `--model`。不要擅自替用户选择付费更高的模型。脚本会自行检测 `pi` CLI；不可用时报错退出，此时改用下方降级方式。
 
 ## 处理结果
 
@@ -52,7 +66,7 @@ python '<技能目录>/scripts/run-search-subagent.py' --query '<完整搜索任
 
 ## 故障降级
 
-如果 `pi` 子进程不可用，当前 Agent 可以直接运行：
+如果既没有 `subagent` 工具、`pi` 子进程也不可用（或执行失败），当前 Agent 可以直接运行：
 
 ```shell
 node '<技能目录>/scripts/research.mjs' --query '<关键词>' --max-results 8 --read 3
