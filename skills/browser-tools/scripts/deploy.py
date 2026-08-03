@@ -43,7 +43,8 @@ def main() -> None:
 
     if dest.exists():
         if not args.force:
-            sys.exit(f"目标目录已存在：{dest}\n使用 --force 覆盖。")
+            print(f"跳过：目标目录已存在（{dest}），使用 --force 覆盖。")
+            return
         shutil.rmtree(dest)
     dest.mkdir(parents=True)
 

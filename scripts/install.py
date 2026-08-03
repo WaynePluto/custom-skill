@@ -192,7 +192,8 @@ def deploy_generic(skill_dir: Path, destination: Path, force: bool) -> None:
     """通用部署：复制必要文件，安装生产依赖。"""
     if destination.exists():
         if not force:
-            sys.exit(f"目标目录已存在：{destination}\n使用 --force 覆盖。")
+            print(f"  跳过（已存在：{destination}，使用 --force 覆盖）")
+            return
         shutil.rmtree(destination)
 
     exclude = {"tests", "node_modules", ".gitignore", "dist"}
@@ -235,9 +236,14 @@ def deploy_skills(skills_dir: Path, name: str | None, force: bool) -> None:
 
         print(f"\n{'═' * 4} {skill_name} {'═' * 4}")
 
+        destination = skills_dir / skill_name
+        if destination.exists() and not force:
+            # 提前跳过，避免为已存在的技能白跑一次 pnpm install
+            print(f"  跳过（已存在：{destination}，使用 --force 覆盖）")
+            continue
+
         build_skill(skill_dir)
 
-        destination = skills_dir / skill_name
         deploy_script = skill_dir / "scripts" / "deploy.py"
 
         print(f"  部署到 {destination} ...")
