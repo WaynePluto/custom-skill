@@ -20,15 +20,25 @@ python scripts/install.py
 ```
 
 脚本会自动完成：
-- 技能：依赖下载 → 构建打包 → 部署到 `~/.agents/skills/`
+- 全局技能：依赖下载 → 构建打包 → 部署到 `~/.agents/skills/`
 - Prompts：将 `prompts/APPEND_SYSTEM.md` 部署到 `~/.pi/agent/`
 - 扩展：将 `extensions/` 下的 Pi 扩展部署到 `~/.pi/agent/extensions/`
 
-### 只安装指定技能
+`project-skills/` 中的项目级技能不会被默认安装，必须显式指定技能名称和目标项目。
+
+### 只安装指定全局技能
 
 ```shell
 python scripts/install.py --name local-web-search
 ```
+
+### 将指定项目级技能安装到项目
+
+```shell
+python scripts/install.py --project-skills --project-dir 'D:/dev/empty' --name pixel2ase
+```
+
+项目级技能部署到 `<project-dir>/.agents/skills/<name>/`。`--project-skills`、`--project-dir` 和 `--name` 必须同时提供；不支持把全部项目级技能批量安装到一个项目。覆盖已有技能时增加 `--force`。
 
 ### 覆盖已安装的技能
 
@@ -59,9 +69,10 @@ python scripts/install.py --skills-dir /path/to/skills --pi-agent-dir /path/to/p
 
 ## 技能列表
 
-| 技能 | 说明 |
-|---|---|
-| [local-web-search](skills/local-web-search/) | 使用本机 Chrome/Edge 进行实时网络搜索、网页阅读和多来源核实 |
+| 技能 | 作用域 | 说明 |
+|---|---|---|
+| [local-web-search](skills/local-web-search/) | 全局 | 使用本机 Chrome/Edge 进行实时网络搜索、网页阅读和多来源核实 |
+| [pixel2ase](project-skills/pixel2ase/) | 项目级 | 将 AI 生成的像素风图片转换为原生分辨率 PNG 和 indexed `.aseprite` 工程 |
 
 ## 目录结构
 
@@ -73,7 +84,7 @@ custom-skills/
 │   └── APPEND_SYSTEM.md     # Pi 系统提示词补充 → ~/.pi/agent/
 ├── extensions/
 │   └── notify.ts            # Pi 扩展 → ~/.pi/agent/extensions/
-├── skills/
+├── skills/                    # 默认安装到全局目录
 │   └── <skill-name>/
 │       ├── SKILL.md           # 技能定义（Agent 读取）
 │       ├── README.md          # 人类可读说明
@@ -83,6 +94,10 @@ custom-skills/
 │       │   ├── deploy.py      # 自定义部署逻辑（如有）
 │       │   └── ...
 │       └── tests/             # 测试（不部署）
+├── project-skills/            # 按名称分发到任意目标项目
+│   └── <skill-name>/
+│       ├── SKILL.md
+│       └── scripts/
 └── AGENTS.md                  # 项目开发规则
 ```
 
@@ -90,9 +105,10 @@ custom-skills/
 
 ### Skills
 
-1. **依赖下载**：在技能源码目录执行 `npm install`，获取构建工具和运行时依赖。
-2. **构建打包**：执行 `npm run build`，将可打包的库编译到 `dist/`，减小部署体积。
-3. **部署**：将打包产物、SKILL.md、运行脚本复制到全局目录，只安装无法打包的运行时依赖。
+1. **依赖下载**：在技能源码目录执行 `pnpm install`，获取构建工具和运行时依赖。
+2. **部署全局技能**：将 `skills/` 中选中的技能复制到全局目录。
+3. **部署项目级技能**：仅在同时提供 `--project-skills --project-dir <目录> --name <技能>` 时，将 `project-skills/<技能>/` 复制到目标项目的 `.agents/skills/<技能>/`。
+4. **隔离作用域**：默认安装不会扫描或安装 `project-skills/`。
 
 ### Prompts
 
@@ -117,9 +133,9 @@ npm test
 
 ## 添加新技能
 
-1. 在 `skills/` 下创建新目录。
+1. 全局技能在 `skills/` 下创建目录；必须按名称显式分发到目标项目的技能放在 `project-skills/`。
 2. 编写 `SKILL.md`（遵循 Agent Skills 规范）。
-3. 如需依赖，添加 `package.json` 并配置 `build` 脚本。
+3. 如需依赖，添加 `package.json`。
 4. 如需自定义部署逻辑，添加 `scripts/deploy.py`。
 5. 添加测试到 `tests/`。
-6. 运行 `python scripts/install.py --name <skill-name>` 验证安装。
+6. 全局技能运行 `python scripts/install.py --name <skill-name>` 验证；项目级技能运行 `python scripts/install.py --project-skills --project-dir <project-root> --name <skill-name>` 验证。

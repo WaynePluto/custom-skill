@@ -214,10 +214,13 @@ def deploy_generic(skill_dir: Path, destination: Path, force: bool) -> None:
     print(f"  部署完成（{dir_size_mb(destination):.1f} MB）")
 
 
-def deploy_skills(skills_dir: Path, name: str | None, force: bool) -> None:
-    """构建并部署技能。"""
-    sources_dir = REPO_ROOT / "skills"
-
+def deploy_skills(
+    sources_dir: Path,
+    skills_dir: Path,
+    name: str | None,
+    force: bool,
+) -> None:
+    """从指定源码目录构建并部署技能。"""
     if name:
         skill_dirs = [sources_dir / name]
         if not skill_dirs[0].exists():
@@ -257,9 +260,12 @@ def deploy_skills(skills_dir: Path, name: str | None, force: bool) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="构建并安装技能、prompts 和扩展（不加选择参数则全部安装）"
+        description="构建并安装全局或项目级技能、prompts 和扩展"
     )
-    parser.add_argument("--name", default=None, help="要安装的技能名称（省略则安装所有）")
+    parser.add_argument(
+        "--name", default=None,
+        help="要安装的技能名称（全局技能可省略；项目级技能必须指定）",
+    )
     parser.add_argument(
         "--skills-dir", type=Path,
         default=Path.home() / ".agents" / "skills",
@@ -274,10 +280,33 @@ def main() -> None:
     parser.add_argument("--skills", action="store_true", help="安装技能")
     parser.add_argument("--prompts", action="store_true", help="部署 prompts")
     parser.add_argument("--extensions", action="store_true", help="部署扩展")
+    parser.add_argument(
+        "--project-skills", action="store_true",
+        help="将 project-skills/ 中的指定技能部署到目标项目",
+    )
+    parser.add_argument(
+        "--project-dir", type=Path,
+        help="目标项目根目录（与 --project-skills、--name 一起使用）",
+    )
     args = parser.parse_args()
 
-    # 不加选择参数时全部安装
-    install_all = not (args.skills or args.prompts or args.extensions)
+    if args.project_skills:
+        if args.project_dir is None:
+            parser.error("使用 --project-skills 时必须指定 --project-dir")
+        if args.name is None:
+            parser.error("使用 --project-skills 时必须指定 --name，不支持安装全部项目级技能")
+        if args.skills or args.prompts or args.extensions:
+            parser.error("--project-skills 不能与 --skills、--prompts 或 --extensions 组合使用")
+        args.project_dir = args.project_dir.expanduser().resolve()
+        if not args.project_dir.is_dir():
+            parser.error(f"目标项目目录不存在或不是目录：{args.project_dir}")
+    elif args.project_dir is not None:
+        parser.error("--project-dir 只能与 --project-skills 一起使用")
+
+    # 不加选择参数时安装全局技能、prompts 和扩展；项目级技能必须显式指定
+    install_all = not (
+        args.skills or args.prompts or args.extensions or args.project_skills
+    )
 
     check_prerequisites()
 
@@ -290,7 +319,15 @@ def main() -> None:
         deploy_extensions(args.pi_agent_dir, args.force)
 
     if install_all or args.skills:
-        deploy_skills(args.skills_dir, args.name, args.force)
+        deploy_skills(REPO_ROOT / "skills", args.skills_dir, args.name, args.force)
+
+    if args.project_skills:
+        deploy_skills(
+            REPO_ROOT / "project-skills",
+            args.project_dir / ".agents" / "skills",
+            args.name,
+            args.force,
+        )
 
     print("\n全部完成。")
 
