@@ -1,15 +1,38 @@
+## 工具选择优先级
+
+- 调用专用工具，不要用 Shell 复刻它们的功能。对应关系：
+  - 搜索文件内容 → `grep`，不要在 Shell 里用 `rg`、`Select-String`、`findstr`。
+  - 按文件名或 glob 找文件 → `find`，不要用 `Get-ChildItem -Recurse`、`fd`、`where`。
+  - 列目录 → `ls`，不要用 `Get-ChildItem`、`dir`。
+  - 读文件或文件片段 → `read`（用 `offset` / `limit` 翻页），不要用 `Get-Content`、`cat`、`sed`、`head`、`tail`。
+  - 改文件 → `edit` / `write`，不要用 `-replace | Set-Content`、`Out-File` 之类的管道改写。
+- Shell 只用于没有对应工具的场景：`git`、包管理与构建测试（`pnpm` / `npm` / `python` 等）、进程与环境查询、文件删除与移动。
+- 上述工具不可用时（未启用或调用失败）才回退到 Shell，并在回答中说明原因。
+- 一次工具调用能拿到的信息，不要拆成多次 Shell 调用；反过来，也不要把多个不相关的命令塞进一次 Shell 调用。
+
+## 子代理（subagent）使用约束
+
+仅当当前会话提供了 `subagent` 工具时适用；没有该工具时忽略本节。
+
+- 默认不使用子代理。只有用户明确要求，或已加载的技能明确要求时才委派。
+- 子代理串行执行：父会话会阻塞等待，同一时刻只能有一个子代理，子代理内部不能再嵌套。
+- 子代理不继承父会话的对话内容，任务描述必须自包含，包含全部必要的路径、约束和验收标准。
+- 不要用子代理做探索性工作（读代码、定位定义、理解项目规范）：它的发现随会话结束而丢失，你还得重新做一遍。这类工作留在父会话里做。
+- 适合委派的是：与主任务线无关且结论可以一段话讲清的独立任务，例如联网调研、批量机械修改、独立的构建/测试运行。
+
 ## Windows Shell 环境
 
 - 当前宿主操作系统为 Windows。
 - Pi 的 Shell 工具虽然出于兼容性原因命名为 `bash`，但其实际执行环境是 PowerShell 7（`pwsh`）。
+- 先按「工具选择优先级」判断该用哪个工具；确实需要 Shell 时，再遵守以下语法约定。
 - 所有 Shell 命令必须使用 PowerShell 7 语法。除非用户明确要求，否则不要生成 Bash、POSIX `sh`、CMD 或 WSL 命令。
-- 优先使用 PowerShell cmdlet 和 Windows 原生路径，例如：
-  - 使用 `Get-ChildItem`，而不是 `ls`。
-  - 使用 `Get-Content`，而不是 `cat`。
-  - 使用 `Select-String` 或 `rg`，而不是 `grep`。
-  - 使用 `Remove-Item`，而不是 `rm`。
+- PowerShell 7 内置一批 Bash 风格别名，在确实需要 Shell 时可以直接使用简短形式，不必写完整 cmdlet 名（但列目录、读文件仍应走 `ls` / `read` 工具，不要用 `ls` / `cat` 别名代替）：`ls`、`cat`、`cd`、`cp`、`mv`、`rm`、`rmdir`、`mkdir`、`echo`、`pwd`、`kill`、`ps`、`sleep`、`tee`、`diff`、`sort`、`clear`。注意它们只是 cmdlet 的别名，参数必须用 PowerShell 语法（例如递归删除是 `rm -Recurse -Force`，不是 `rm -rf`；`ls -la` 是无效的）。
+- 对没有内置别名的 Bash 命令，使用 PowerShell 对应写法：
+  - 处理命令输出的文本过滤用 `Select-String`，而不是 `grep`；搜索代码库内容仍应使用 `grep` 工具。
   - 使用 `$env:NAME`，而不是 `$NAME`。
-  - 使用 `Get-Command`，而不是 `command -v`。
+  - 使用 `Get-Command`，而不是 `command -v` 或 `which`。
+  - 使用 `New-Item -ItemType File`，而不是 `touch`。
+  - `curl` 和 `wget` 在 pwsh 7 中不是别名，会调用系统自带的 `curl.exe`（如存在）。
 - 使用 PowerShell 的 operator 和 control flow 语法，例如 `;`、pipeline、`if (...) { ... }`、`$LASTEXITCODE`，以及 PowerShell 7 支持的 pipeline-chain operator `&&` 和 `||`。
 - 不要使用 Bash 专属语法，例如 `export`、`source`、`[[ ... ]]`、`VAR=value command`、反斜杠续行或 `/dev/null`。
 - 调用路径中包含空格的可执行文件时，使用 PowerShell call operator `&`，例如：`& 'C:\Program Files\Tool\tool.exe' --version`。
