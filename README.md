@@ -22,6 +22,7 @@ python scripts/install.py
 脚本会自动完成：
 - 全局技能：依赖下载 → 构建打包 → 部署到 `~/.agents/skills/`
 - Prompts：将 `prompts/APPEND_SYSTEM.md` 部署到 `~/.pi/agent/`
+- 二进制：确保 `grep`、`find` 依赖的 `rg`、`fd` 存在于 `~/.pi/agent/bin/`
 - 扩展：将 `extensions/` 下的 Pi 扩展部署到 `~/.pi/agent/extensions/`
 
 `project-skills/` 中的项目级技能不会被默认安装，必须显式指定技能名称和目标项目。
@@ -48,7 +49,7 @@ python scripts/install.py --force
 
 ### 只安装指定类别
 
-不加选择参数时全部安装；加 `--skills`、`--prompts`、`--extensions` 则只安装对应类别（可组合）：
+不加选择参数时全部安装；加 `--skills`、`--prompts`、`--extensions`、`--binaries` 则只安装对应类别（可组合）：
 
 ```shell
 # 只更新 prompts
@@ -57,8 +58,11 @@ python scripts/install.py --prompts --force
 # 只安装技能
 python scripts/install.py --skills
 
-# 只部署扩展
+# 只部署扩展（会连带检查 rg / fd）
 python scripts/install.py --extensions --force
+
+# 只检查二进制依赖，有新版时询问是否升级
+python scripts/install.py --binaries
 ```
 
 ### 自定义安装目录
@@ -66,6 +70,16 @@ python scripts/install.py --extensions --force
 ```shell
 python scripts/install.py --skills-dir /path/to/skills --pi-agent-dir /path/to/pi/agent
 ```
+
+### npm scripts 快捷方式
+
+```shell
+pnpm run sync         # 等价于 python scripts/install.py
+pnpm run sync:force   # 等价于 python scripts/install.py --force
+pnpm test             # 跑全部静态测试（Node + Python）
+```
+
+注：这些脚本不能叫 `install`（npm 生命周期钩子，`npm install` 会递归触发），也不建议叫 `setup` / `deploy`（与 `pnpm setup`、`pnpm deploy` 内置命令同名）。
 
 ## 技能列表
 
@@ -83,7 +97,12 @@ custom-skills/
 ├── prompts/
 │   └── APPEND_SYSTEM.md     # Pi 系统提示词补充 → ~/.pi/agent/
 ├── extensions/
-│   └── notify.ts            # Pi 扩展 → ~/.pi/agent/extensions/
+│   ├── notify.ts            # Pi 扩展 → ~/.pi/agent/extensions/
+│   ├── enable-core-tools.ts # 同上：激活 grep / find / ls
+│   └── tools-status.ts      # 同上：/tools-status 工具使用统计
+├── tests/
+│   ├── *.test.mjs           # 扩展的静态测试（不部署）
+│   └── test_*.py            # install.py 的静态测试
 ├── skills/                    # 默认安装到全局目录
 │   └── <skill-name>/
 │       ├── SKILL.md           # 技能定义（Agent 读取）
@@ -117,6 +136,56 @@ custom-skills/
 | 文件 | 作用 |
 |---|---|
 | `APPEND_SYSTEM.md` | 追加到 Pi 系统提示词末尾，定义全局行为规则 |
+
+### Extensions
+
+`extensions/` 下的文件和目录会被复制到 `~/.pi/agent/extensions/`，CLI（`pi`）与 GUI（pi-agent-chat）共享同一目录，改动对两边同时生效。
+
+| 扩展 | 作用 |
+|---|---|
+| `notify.ts` | 任务完成时发送 Windows toast 通知 |
+| `enable-core-tools.ts` | 每次 `session_start` 时把 SDK 内置的 `grep` / `find` / `ls` 补进激活集（Pi 默认只激活 `read`/`bash`/`edit`/`write`） |
+| `tools-status.ts` | 提供 `/tools-status` 斜杠命令，统计本会话**每个工具**的调用 / 完成 / 出错 / 未完成次数，并附带思考段数等辅助指标 |
+
+`/tools-status` 无参数，一次输出整份报告（范围固定为当前分支，首行为标题行）：
+
+```
+工具使用统计（当前分支）
+工具调用 106 次 / 5 个工具 · 完成 106 · 未完成 0 · 出错 4（3.8%）
+bash: 调用 49 · 完成 49 · 出错 2
+read: 调用 29 · 完成 29
+edit: 调用 19 · 完成 19 · 出错 2
+…
+思考 60 段 / 60 轮 · 47749 字符
+模型 anthropic/claude · 思考等级 medium
+```
+
+口径：工具调用按 assistant 消息里的 `toolCall` 块计，结果按 `toolResult` 消息计，未完成 = 调用 − 结果（Esc 中断 / 崩溃）；用户 `!` 命令（`bashExecution`）不计入工具调用；被扩展拦截的调用与真实失败一样记为 `isError`；subagent 子会话独立记账，父会话里只算 1 次工具调用。
+
+输出通道：一次 `ctx.ui.notify(整份报告)`，CLI 与 GUI 共用同一条路径，效果一致——报告都留在对话流里而不是弹层：TUI 的 `notify(info)` 向聊天区追加一段文本，pi-agent-chat 把扩展的 `notify` 渲染成 transcript 卡片（首行作标题，多行自动折叠）。无 UI 的 `json` / `print` 模式下 `notify` 是 no-op。
+
+口径：思考段数按 `thinking` 块计、思考轮数按含 thinking 的 assistant 消息计；用户 `!` 命令（`bashExecution`）不计入工具调用；被扩展拦截的工具调用与真实失败一样记为 `isError`；subagent 子会话独立记账，父会话里只算 1 次工具调用。详见 `SESSION-STATS-PLAN.md` §2。
+
+`grep` 依赖 `rg`、`find` 依赖 `fd`，二进制统一放在 `~/.pi/agent/bin/`（与 Pi SDK 同一位置，CLI 与 GUI 共用）。安装脚本的处理规则：
+
+| 情况 | 行为 |
+|---|---|
+| `bin/` 里没有 | 从 GitHub Releases 下载最新版 |
+| 下载失败 | **中断安装**，打印资产 URL 和目标路径，手动放好后重跑即可 |
+| `bin/` 里已有 | 对比 GitHub 最新版；有新版时询问 `[y/N]`，输入 `y` 才升级（`--force` 不会绕过询问，非交互环境只提示不升级） |
+| 升级失败 | 保留原版本，不中断安装 |
+| 仅系统 PATH 上有 | 只报告版本，不接管升级 |
+| `PI_OFFLINE=1` | 跳过下载和更新检查并提示 |
+
+静态测试：
+
+```shell
+# 扩展逻辑
+node --experimental-strip-types --test tests/enable-core-tools.test.mjs tests/tools-status.test.mjs
+
+# install.py 的二进制检查/下载/升级逻辑
+python -m unittest discover -s tests -p 'test_*.py'
+```
 
 开发阶段的 `node_modules/`、`dist/`、lock 文件均不纳入 Git。
 
