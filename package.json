@@ -2,6 +2,11 @@
   "name": "custom-skills",
   "version": "0.1.0",
   "private": true,
+  "scripts": {
+    "sync": "python scripts/install.py",
+    "sync:force": "python scripts/install.py --force",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs && python -m unittest discover -s tests -p \"test_*.py\""
+  },
   "engines": {
     "node": ">=20",
     "pnpm": ">=9"
