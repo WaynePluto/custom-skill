@@ -7,11 +7,11 @@
 - **Python >= 3.10**
 - **Node.js >= 20**（部分技能需要）
 - **本机安装的 Chrome 或 Edge**（浏览器类技能需要）
-- **Windows + PowerShell 7（pwsh）**：项目中的脚本、SKILL 命令示例和 prompts 默认面向 Windows 上的 PowerShell 7 编写，Shell 命令使用 pwsh 7 语法；在其他 OS / Shell 下使用时需自行改写相应命令
+- **Windows + PowerShell 7（pwsh）**：项目中的脚本、SKILL 命令示例和 context 文件默认面向 Windows 上的 PowerShell 7 编写，Shell 命令使用 pwsh 7 语法；在其他 OS / Shell 下使用时需自行改写相应命令
 
 ## 快速开始
 
-### 一键安装所有技能、prompts 和扩展
+### 一键安装所有技能、context 文件和扩展
 
 ```shell
 git clone https://github.com/<your-username>/custom-skills.git
@@ -21,7 +21,7 @@ python scripts/install.py
 
 脚本会自动完成：
 - 全局技能：依赖下载 → 构建打包 → 部署到 `~/.agents/skills/`
-- Prompts：将 `prompts/APPEND_SYSTEM.md` 部署到 `~/.pi/agent/`
+- Context：将 `context/APPEND_SYSTEM.md` 部署到 `~/.pi/agent/`
 - 二进制：确保 `grep`、`find` 依赖的 `rg`、`fd` 存在于 `~/.pi/agent/bin/`
 - 扩展：将 `extensions/` 下的 Pi 扩展部署到 `~/.pi/agent/extensions/`
 
@@ -49,11 +49,11 @@ python scripts/install.py --force
 
 ### 只安装指定类别
 
-不加选择参数时全部安装；加 `--skills`、`--prompts`、`--extensions`、`--binaries` 则只安装对应类别（可组合）：
+不加选择参数时全部安装；加 `--skills`、`--context`、`--extensions`、`--binaries` 则只安装对应类别（可组合）：
 
 ```shell
-# 只更新 prompts
-python scripts/install.py --prompts --force
+# 只更新 context 文件
+python scripts/install.py --context --force
 
 # 只安装技能
 python scripts/install.py --skills
@@ -94,7 +94,7 @@ pnpm test             # 跑全部静态测试（Node + Python）
 custom-skills/
 ├── scripts/
 │   └── install.py            # 全局安装脚本
-├── prompts/
+├── context/
 │   └── APPEND_SYSTEM.md     # Pi 系统提示词补充 → ~/.pi/agent/
 ├── extensions/
 │   ├── notify.ts            # Pi 扩展 → ~/.pi/agent/extensions/
@@ -129,9 +129,9 @@ custom-skills/
 3. **部署项目级技能**：仅在同时提供 `--project-skills --project-dir <目录> --name <技能>` 时，将 `project-skills/<技能>/` 复制到目标项目的 `.agents/skills/<技能>/`。
 4. **隔离作用域**：默认安装不会扫描或安装 `project-skills/`。
 
-### Prompts
+### Context
 
-`prompts/` 目录下的 `.md` 文件会被复制到 `~/.pi/agent/`。目前支持：
+`context/` 目录下的 `.md` 文件会被复制到 `~/.pi/agent/`。命名为 `context` 而非 `prompts`，是为了与 Pi 自身的 `~/.pi/agent/prompts/`（提示词模板 / 斜杠命令）区分。目前支持：
 
 | 文件 | 作用 |
 |---|---|

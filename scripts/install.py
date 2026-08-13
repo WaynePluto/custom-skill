@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""构建并安装技能、prompts 和扩展到全局目录。"""
+"""构建并安装技能、context 文件和扩展到全局目录。"""
 
 import argparse
 import json
@@ -46,23 +46,23 @@ def dir_size_mb(path: Path) -> float:
     return total / (1024 * 1024)
 
 
-# ── Prompts ──
+# ── Context ──
 
-def deploy_prompts(pi_agent_dir: Path, force: bool) -> None:
-    """将 prompts/ 目录下的文件部署到 Pi agent 目录。"""
-    prompts_dir = REPO_ROOT / "prompts"
-    if not prompts_dir.exists():
+def deploy_context(pi_agent_dir: Path, force: bool) -> None:
+    """将 context/ 目录下的文件部署到 Pi agent 目录。"""
+    context_dir = REPO_ROOT / "context"
+    if not context_dir.exists():
         return
 
-    prompt_files = list(prompts_dir.glob("*.md"))
-    if not prompt_files:
+    context_files = list(context_dir.glob("*.md"))
+    if not context_files:
         return
 
-    print(f"\n{'═' * 4} prompts {'═' * 4}")
+    print(f"\n{'═' * 4} context {'═' * 4}")
 
     pi_agent_dir.mkdir(parents=True, exist_ok=True)
 
-    for src in prompt_files:
+    for src in context_files:
         dest = pi_agent_dir / src.name
         if dest.exists() and not force:
             print(f"  跳过 {src.name}（已存在，使用 --force 覆盖）")
@@ -99,7 +99,7 @@ def detect_pwsh() -> str | None:
 def configure_shell(pi_agent_dir: Path, force: bool) -> None:
     """在 Windows 上将 settings.json 的 shellPath 指向 PowerShell 7。
 
-    prompts/APPEND_SYSTEM.md 假定工具 shell 是 pwsh；此处确保安装后实际 shell 与之一致。
+    context/APPEND_SYSTEM.md 假定工具 shell 是 pwsh；此处确保安装后实际 shell 与之一致。
     采用合并写法：只设置 shellPath 键，保留用户已有的其它配置。
     """
     if sys.platform != "win32":
@@ -629,7 +629,7 @@ def deploy_skills(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="构建并安装全局或项目级技能、prompts 和扩展"
+        description="构建并安装全局或项目级技能、context 文件和扩展"
     )
     parser.add_argument(
         "--name", default=None,
@@ -650,7 +650,7 @@ def main() -> None:
         help="覆盖已存在的文件（不影响二进制：rg/fd 升级始终需要交互确认）",
     )
     parser.add_argument("--skills", action="store_true", help="安装技能")
-    parser.add_argument("--prompts", action="store_true", help="部署 prompts")
+    parser.add_argument("--context", action="store_true", help="部署 context 文件（如 APPEND_SYSTEM.md）")
     parser.add_argument("--extensions", action="store_true", help="部署扩展")
     parser.add_argument(
         "--binaries", action="store_true",
@@ -671,23 +671,23 @@ def main() -> None:
             parser.error("使用 --project-skills 时必须指定 --project-dir")
         if args.name is None:
             parser.error("使用 --project-skills 时必须指定 --name，不支持安装全部项目级技能")
-        if args.skills or args.prompts or args.extensions or args.binaries:
-            parser.error("--project-skills 不能与 --skills、--prompts、--extensions 或 --binaries 组合使用")
+        if args.skills or args.context or args.extensions or args.binaries:
+            parser.error("--project-skills 不能与 --skills、--context、--extensions 或 --binaries 组合使用")
         args.project_dir = args.project_dir.expanduser().resolve()
         if not args.project_dir.is_dir():
             parser.error(f"目标项目目录不存在或不是目录：{args.project_dir}")
     elif args.project_dir is not None:
         parser.error("--project-dir 只能与 --project-skills 一起使用")
 
-    # 不加选择参数时安装全局技能、prompts 和扩展；项目级技能必须显式指定
+    # 不加选择参数时安装全局技能、context 文件和扩展；项目级技能必须显式指定
     install_all = not (
-        args.skills or args.prompts or args.extensions or args.binaries or args.project_skills
+        args.skills or args.context or args.extensions or args.binaries or args.project_skills
     )
 
     check_prerequisites()
 
-    if install_all or args.prompts:
-        deploy_prompts(args.pi_agent_dir, args.force)
+    if install_all or args.context:
+        deploy_context(args.pi_agent_dir, args.force)
         # APPEND_SYSTEM.md 假定工具 shell 为 pwsh，需同步配置 settings.json
         configure_shell(args.pi_agent_dir, args.force)
 
