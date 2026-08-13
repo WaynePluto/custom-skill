@@ -88,6 +88,44 @@ pnpm test             # 跑全部静态测试（Node + Python）
 | [local-web-search](skills/local-web-search/) | 全局 | 使用本机 Chrome/Edge 进行实时网络搜索、网页阅读和多来源核实 |
 | [pixel2ase](project-skills/pixel2ase/) | 项目级 | 将 AI 生成的像素风图片转换为原生分辨率 PNG 和 indexed `.aseprite` 工程 |
 
+## 扩展列表
+
+| 扩展 | 提供 | 说明 |
+|---|---|---|
+| [notify](extensions/notify.ts) | 事件钩子 | 任务完成提醒 |
+| [enable-core-tools](extensions/enable-core-tools.ts) | 事件钩子 | 把 SDK registry 里的 `grep` / `find` / `ls` 补进激活集 |
+| [tools-status](extensions/tools-status.ts) | `/tools-status` | 本会话各工具的调用 / 完成 / 出错次数 |
+| [services](extensions/services/) | `service_start` `service_list` `service_logs` `service_stop` `service_restart` · `/services` | 常驻服务（dev server、后端、watcher）的后台启动与管理 |
+
+### services
+
+`pnpm dev` 这类命令永远不退出，而 `bash` 工具的语义是「等进程退出、拿退出码」，模型一调就卡住；
+就算起来了，之后也没人记得它在哪，用户想手动关都找不到。本扩展把「后台执行 + 句柄 + 单独读日志」补齐：
+
+- 进程以 **detached** 方式启动并 `unref()`，脱离 pi 的进程树；工具调用立即返回，不阻塞对话
+- 输出写入 `<project>/.pi/logs/<name>.log`，注册表写入 `<project>/.pi/services.json`
+- 就绪探测三选一：`port`（TCP 可连）> `readyLog`（日志正则）> 固定等待；超时不算失败，直接把日志尾部返回给模型自己判断
+- 运行中的服务经 `ctx.ui.setStatus` / `ctx.ui.setWidget` 展示，两者都是 SDK 原生、宿主无关的接口：
+  CLI 画在 footer 与编辑器上方，pi-agent-chat 画在状态行与输入框上方，扩展本身不依赖任何特定宿主
+- 用户通道是 `/services list | logs <name> | stop <name> | restart <name>`，与模型用的工具共用同一份实现
+
+**pid 安全**：操作系统会复用 pid，所以「pid 还活着」不等于「还是我们那个进程」。
+所有会杀进程的路径都先比对进程创建时间：对不上就从注册表剔除，比对不了则**拒绝自动停止**并把手动命令告知用户——
+杀错一棵进程树的代价远大于多一次确认。
+
+**Windows 启动链**：命令默认跑在**与 `bash` 工具相同的 shell**（Windows 上是 PowerShell 7），
+所以服务命令和普通 Shell 命令用同一套语法，不存在方言切换；`pwsh` 不在 PATH 上时退回
+ cmd.exe，并在 `service_start` 的返回里明确提示。需要别的 shell 时传 `shell` 参数覆盖。
+
+Windows 上中间多一层 node 启动器进程，这不是多余设计，而是三个实测结论逼出来的
+（详见 `core.ts` 的 `shellInvocation` 注释）：Node 的 `shell` 选项与 `detached` 不兼容、
+pwsh 直接跑在无 console 的 detached 进程里会立即退出、
+cmd.exe 在 detached 下不把子进程的 stdio 转发到继承的文件句柄（日志永远为空）。
+套一层 node 后，pwsh 变成启动器的普通子进程，console 与 stdio 均正常，
+`killTree` 会把 node → pwsh → 服务整棵树清掉。POSIX 不受影响，保持原生 `sh -c`。
+
+建议把 `.pi/logs/` 和 `.pi/services.json` 加入目标项目的 `.gitignore`。
+
 ## 目录结构
 
 ```
@@ -99,7 +137,8 @@ custom-skills/
 ├── extensions/
 │   ├── notify.ts            # Pi 扩展 → ~/.pi/agent/extensions/
 │   ├── enable-core-tools.ts # 同上：激活 grep / find / ls
-│   └── tools-status.ts      # 同上：/tools-status 工具使用统计
+│   ├── tools-status.ts      # 同上：/tools-status 工具使用统计
+│   └── services/            # 同上：常驻服务管理（目录形式，services.ts 为入口）
 ├── tests/
 │   ├── *.test.mjs           # 扩展的静态测试（不部署）
 │   └── test_*.py            # install.py 的静态测试

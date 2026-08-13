@@ -1,0 +1,9 @@
+{
+  "name": "pi-services-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "常驻服务（dev server、后端、watcher）的后台启动与管理",
+  "pi": {
+    "extensions": ["./services.ts"]
+  }
+}
