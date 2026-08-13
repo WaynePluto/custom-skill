@@ -140,7 +140,7 @@ test("报告以工具数据开头，随后是思考、模型和口径说明", ()
 	assert.match(lines[0], /^工具调用 1 次 \/ 1 个工具/);
 	assert.equal(lines[1], "bash: 调用 1 · 完成 1 · 出错 1");
 	const joined = lines.join("\n");
-	assert.match(joined, /思考 1 段 \/ 1 轮 · 2 字符/);
+	assert.match(joined, /思考 1 段 · 2 字符/);
 	assert.match(joined, /用户 bash 1/);
 	assert.match(joined, /模型 anthropic\/claude · 思考等级 high/);
 	assert.match(joined, /仅统计当前分支/);

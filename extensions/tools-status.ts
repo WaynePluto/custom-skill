@@ -182,7 +182,7 @@ export function formatReportLines(
 		formatToolSummary(stats),
 		...(toolLines.length > 0 ? toolLines : ["（无工具调用）"]),
 		DIVIDER,
-		`思考 ${stats.thinkingBlocks} 段 / ${stats.thinkingMessages} 轮 · ${stats.thinkingChars} 字符`,
+		`思考 ${stats.thinkingBlocks} 段 · ${stats.thinkingChars} 字符`,
 		`用户消息 ${stats.userMessages} · assistant 消息 ${stats.assistantMessages} · 用户 bash ${stats.userBash} · 条目 ${stats.entries}`,
 		`模型 ${meta.model ?? "unknown"} · 思考等级 ${meta.thinkingLevel ?? "unknown"}`,
 		DIVIDER,
