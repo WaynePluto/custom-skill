@@ -1,14 +1,14 @@
 ## 工具选择优先级
 
-- 调用专用工具，不要用 Shell 复刻它们的功能。对应关系：
-  - 搜索文件内容 → `grep`，不要在 Shell 里用 `rg`、`Select-String`、`findstr`。
+- 调用专用工具，不要用 `pwsh` 复刻它们的功能。对应关系：
+  - 搜索文件内容 → `grep`，不要在 `pwsh` 里用 `rg`、`Select-String`、`findstr`。
   - 按文件名或 glob 找文件 → `find`，不要用 `Get-ChildItem -Recurse`、`fd`、`where`。
   - 列目录 → `ls`，不要用 `Get-ChildItem`、`dir`。
   - 读文件或文件片段 → `read`（用 `offset` / `limit` 翻页），不要用 `Get-Content`、`cat`、`sed`、`head`、`tail`。
   - 改文件 → `edit` / `write`，不要用 `-replace | Set-Content`、`Out-File` 之类的管道改写。
-- Shell 只用于没有对应工具的场景：`git`、包管理与构建测试（`pnpm` / `npm` / `python` 等）、进程与环境查询、文件删除与移动。但**不包括不会自己退出的常驻命令**，那类命令见「常驻服务」一节。
-- 上述工具不可用时（未启用或调用失败）才回退到 Shell，并在回答中说明原因。
-- 一次工具调用能拿到的信息，不要拆成多次 Shell 调用；反过来，也不要把多个不相关的命令塞进一次 Shell 调用。
+- `pwsh` 只用于没有对应工具的场景：`git`、包管理与构建测试（`pnpm` / `npm` / `python` 等）、进程与环境查询、文件删除与移动。但**不包括不会自己退出的常驻命令**，那类命令见「常驻服务」一节。
+- 上述工具不可用时（未启用或调用失败）才回退到 `pwsh`，并在回答中说明原因。
+- 一次工具调用能拿到的信息，不要拆成多次 `pwsh` 调用；反过来，也不要把多个不相关的命令塞进一次 `pwsh` 调用。
 
 ## 子代理使用约束
 
@@ -28,22 +28,21 @@
 
 先用 `service_list` 查服务与历史日志实况；它会按需放出 `service_logs` / `service_stop` / `service_restart`。
 
-- 判据只有一条：**命令会不会自己退出**。会退出的走 Shell（`pnpm build`、`pnpm test`、`git`、一次性脚本）；不会退出的走 `service_start`（`pnpm dev`、`npm start`、后端服务、`--watch` 监听、`docker compose up`）。
-- 不要用 Shell 启动常驻命令：Shell 会一直等到超时，既拿不到结果也占住了对话。也不要用 Shell 里的后台写法（`Start-Process`、`&`、`nohup`）绕过去：那样起的进程没有注册表也没有日志，之后你和用户都找不到它。
+- 判据只有一条：**命令会不会自己退出**。会退出的走 `pwsh`（`pnpm build`、`pnpm test`、`git`、一次性脚本）；不会退出的走 `service_start`（`pnpm dev`、`npm start`、后端服务、`--watch` 监听、`docker compose up`）。
+- 不要用 `pwsh` 启动常驻命令：`pwsh` 会一直等到超时，既拿不到结果也占住了对话。也不要用 `pwsh` 里的后台写法（`Start-Process`、`Start-Job`、`&` 后台调用）绕过去：那样起的进程没有注册表也没有日志，之后你和用户都找不到它。
 - 启动时尽量给出就绪判据：监听端口就传 `port`，否则用 `readyLog` 给一条日志正则。两者都没有时只能靠固定等待，容易把「还没起来」误判成「起来了」。
-- 返回「未确认就绪」时不要直接当成失败，先读随返回的日志尾部判断；需要再看时用 `service_logs` 取一次，不要反复轮询，也不要在 Shell 里 `tail` 日志文件。
+- 返回「未确认就绪」时不要直接当成失败，先读随返回的日志尾部判断；需要再看时用 `service_logs` 取一次，不要反复轮询，也不要在 `pwsh` 里用 `Get-Content -Tail` 读日志文件。
 - 改了代码需要让服务生效时用 `service_restart`，不要手动拼 `service_stop` + `service_start`。
 - 用户问「现在开着哪些服务」时用 `service_list`，不要去翻进程列表或端口占用。
-- 服务命令与 Shell 命令用**同一套语法**（见「Windows Shell 环境」一节），不需要切换方言；只有当 `service_start` 的返回里明确提示语法方言不同时，才按它说的改。
+- 服务命令与 `pwsh` 命令用**同一套语法**（见「Windows 命令执行环境」一节），不需要切换方言；只有当 `service_start` 的返回里明确提示语法方言不同时，才按它说的改。
 - 收尾：为验证而临时起的服务，任务结束时应主动停掉；用户自己长期在用的服务不要擅自停。
 
-## Windows Shell 环境
+## Windows 命令执行环境（`pwsh` 工具）
 
-- 当前宿主操作系统为 Windows。
-- Pi 的 Shell 工具虽然出于兼容性原因命名为 `bash`，但其实际执行环境是 PowerShell 7（`pwsh`）。
-- 先按「工具选择优先级」判断该用哪个工具；确实需要 Shell 时，再遵守以下语法约定。
-- 所有 Shell 命令必须使用 PowerShell 7 语法。除非用户明确要求，否则不要生成 Bash、POSIX `sh`、CMD 或 WSL 命令。
-- PowerShell 7 内置一批 Bash 风格别名，在确实需要 Shell 时可以直接使用简短形式，不必写完整 cmdlet 名（但列目录、读文件仍应走 `ls` / `read` 工具，不要用 `ls` / `cat` 别名代替）：`ls`、`cat`、`cd`、`cp`、`mv`、`rm`、`rmdir`、`mkdir`、`echo`、`pwd`、`kill`、`ps`、`sleep`、`tee`、`diff`、`sort`、`clear`。注意它们只是 cmdlet 的别名，参数必须用 PowerShell 语法（例如递归删除是 `rm -Recurse -Force`，不是 `rm -rf`；`ls -la` 是无效的）。
+- 当前宿主操作系统为 Windows，`pwsh` 工具在 PowerShell 7 中执行命令。
+- 先按「工具选择优先级」判断该用哪个工具；确实需要执行命令时，再遵守以下语法约定。
+- 所有命令必须使用 PowerShell 7 语法。除非用户明确要求，否则不要生成 Bash、POSIX `sh`、CMD 或 WSL 命令。
+- PowerShell 7 内置一批 Bash 风格别名，在确实需要执行命令时可以直接使用简短形式，不必写完整 cmdlet 名（但列目录、读文件仍应走 `ls` / `read` 工具，不要用 `ls` / `cat` 别名代替）：`ls`、`cat`、`cd`、`cp`、`mv`、`rm`、`rmdir`、`mkdir`、`echo`、`pwd`、`kill`、`ps`、`sleep`、`tee`、`diff`、`sort`、`clear`。注意它们只是 cmdlet 的别名，参数必须用 PowerShell 语法（例如递归删除是 `rm -Recurse -Force`，不是 `rm -rf`；`ls -la` 是无效的）。
 - 对没有内置别名的 Bash 命令，使用 PowerShell 对应写法：
   - 处理命令输出的文本过滤用 `Select-String`，而不是 `grep`；搜索代码库内容仍应使用 `grep` 工具。
   - 使用 `$env:NAME`，而不是 `$NAME`。
@@ -57,7 +56,7 @@
 
 ## 脚本语言选择
 
-- 上述 PowerShell 7 规则仅适用于在 Shell 中直接执行的命令和一次性操作。
+- 上述 PowerShell 7 规则仅适用于用 `pwsh` 直接执行的命令和一次性操作。
 - 当任务需要创建可保存、可复用的脚本文件时，优先使用 Python（`.py`），其次才是 PowerShell（`.ps1`）。
 - 理由：Python 跨平台、生态更广、可读性更好，且避免 PowerShell 在参数传递、编码和模块路径上的常见陷阱。
 - 仅在以下场景才使用 `.ps1` 脚本：任务强依赖 PowerShell 特有能力（如 Windows 系统管理 cmdlet、COM 对象、WMI 查询），或用户明确要求。
