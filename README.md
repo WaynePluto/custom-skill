@@ -21,7 +21,7 @@ python scripts/install.py
 
 脚本会自动完成：
 - 全局技能：依赖下载 → 构建打包 → 部署到 `~/.agents/skills/`
-- Context：将 `context/APPEND_SYSTEM.md` 部署到 `~/.pi/agent/`
+- Context：将 `context/` 下的 `SYSTEM.md`、`APPEND_SYSTEM.md` 部署到 `~/.pi/agent/`
 - 二进制：确保 `grep`、`find` 依赖的 `rg`、`fd` 存在于 `~/.pi/agent/bin/`
 - 扩展：将 `extensions/` 下的 Pi 扩展部署到 `~/.pi/agent/extensions/`
 
@@ -158,6 +158,7 @@ custom-skills/
 ├── scripts/
 │   └── install.py            # 全局安装脚本
 ├── context/
+│   ├── SYSTEM.md            # Pi 系统提示词替换 → ~/.pi/agent/
 │   └── APPEND_SYSTEM.md     # Pi 系统提示词补充 → ~/.pi/agent/
 ├── extensions/
 │   ├── notify.ts            # Pi 扩展 → ~/.pi/agent/extensions/
@@ -200,6 +201,7 @@ custom-skills/
 
 | 文件 | 作用 |
 |---|---|
+| `SYSTEM.md` | 替换 Pi 默认系统提示词，定义身份与基本要求 |
 | `APPEND_SYSTEM.md` | 追加到 Pi 系统提示词末尾，定义全局行为规则 |
 
 ### Extensions
