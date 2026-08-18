@@ -1,0 +1,10 @@
+{
+  "name": "pi-pwsh-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "面向 Windows / PowerShell 7 的命令执行工具",
+  "pi": {
+    "extensions": ["./pwsh.ts"]
+  }
+}

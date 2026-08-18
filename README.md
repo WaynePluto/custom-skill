@@ -95,7 +95,22 @@ pnpm test             # 跑全部静态测试（Node + Python）
 | [notify](extensions/notify.ts) | 事件钩子 | 任务完成提醒 |
 | [enable-core-tools](extensions/enable-core-tools.ts) | 事件钩子 | 把 SDK registry 里的 `grep` / `find` / `ls` 补进激活集 |
 | [tools-status](extensions/tools-status.ts) | `/tools-status` | 本会话各工具的调用 / 完成 / 出错次数 |
+| [pwsh](extensions/pwsh/) | `pwsh` | 使用 PowerShell 7 语法执行命令；不修改内置 `bash` 的激活状态 |
 | [services](extensions/services/) | `service_start` `service_list`（常驻 loader）· `service_logs` `service_stop` `service_restart`（按需加载）· `/services` | 常驻服务（dev server、后端、watcher）的后台启动与管理 |
+
+### pwsh
+
+`pwsh` 是面向固定 Windows / PowerShell 7 工作流的命令工具，避免工具名叫 `bash`、模型却必须输出
+PowerShell 语法的认知错位。扩展从 PATH 和 PowerShell 7 标准安装目录自动发现候选，逐个用
+`-NoProfile -NonInteractive` 探测版本，只在主版本 >= 7 时注册工具；不可用时保留其它工具原状并给出通知。
+
+执行层复用 Pi 的 `createBashToolDefinition()`，因此保留流式输出、Esc 取消、超时、Windows 进程树清理、
+末尾 2000 行 / 50KB 截断、完整输出临时文件与 `PI_*` 会话环境；公开的工具名、参数说明和提示全部使用
+PowerShell 7 语义，工具调用在 TUI 中以 `PS>` 开头显示。
+
+扩展**不会**调用 `pi.setActiveTools()`，也不会覆盖或禁用内置 `bash`。是否关闭 `bash` 属于用户自己的
+工具集策略，可在扩展之外单独处理；即使两个工具同时激活，`pwsh` 的 guideline 也会要求模型只向它传
+PowerShell 7 语法。
 
 ### services
 
@@ -148,6 +163,7 @@ custom-skills/
 │   ├── notify.ts            # Pi 扩展 → ~/.pi/agent/extensions/
 │   ├── enable-core-tools.ts # 同上：激活 grep / find / ls
 │   ├── tools-status.ts      # 同上：/tools-status 工具使用统计
+│   ├── pwsh/                # 同上：PowerShell 7 命令工具（pwsh.ts 为入口）
 │   └── services/            # 同上：常驻服务管理（目录形式，services.ts 为入口）
 ├── tests/
 │   ├── *.test.mjs           # 扩展的静态测试（不部署）
