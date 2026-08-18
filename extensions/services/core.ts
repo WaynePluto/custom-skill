@@ -59,6 +59,25 @@ export function logPath(cwd: string, name: string): string {
 	return path.join(cwd, ".pi", "logs", `${name}.log`);
 }
 
+/**
+ * `.pi/logs/` 下的服务名（去掉 `.log` 后缀）。
+ * 一份扫描两个用途：判断值不值得放出 `service_logs`，以及在报告里告诉调用方有哪些日志可读。
+ * 只放工具不给名字，调用方根本不知道该传什么 name。
+ */
+export function listLogNames(cwd: string): string[] {
+	try {
+		return fs
+			.readdirSync(path.join(cwd, ".pi", "logs"), { withFileTypes: true })
+			.filter((entry) => entry.isFile() && entry.name.endsWith(".log"))
+			.map((entry) => entry.name.slice(0, -".log".length))
+			.filter(isValidName)
+			.sort();
+	} catch {
+		// 目录不存在就是「一份日志都没有」，不是错误。
+		return [];
+	}
+}
+
 /** 服务名同时用作文件名和注册表主键，先挡掉路径穿越和空白名。 */
 export function isValidName(name: string): boolean {
 	return /^[A-Za-z0-9._-]{1,64}$/.test(name);
@@ -443,15 +462,89 @@ export function formatStatus(services: ServiceRecord[]): string | undefined {
 	return `\u25b6 ${services.length} service${services.length === 1 ? "" : "s"}`;
 }
 
-/** 报告用：服务列表加日志文件位置。 */
-export function formatServiceReport(services: ServiceRecord[], now = Date.now()): string {
-	if (services.length === 0) return "没有正在运行的服务";
+/**
+ * 报告用：服务列表加日志文件位置。
+ * `logNames` 中没在运行的那些单独列一行；服务死后唯一能做的事就是读日志，而读日志需要名字。
+ */
+export function formatServiceReport(
+	services: ServiceRecord[],
+	now = Date.now(),
+	logNames: readonly string[] = [],
+): string {
+	const running = new Set(services.map((service) => service.name));
+	const stale = logNames.filter((name) => !running.has(name));
+	const staleLine = stale.length === 0 ? [] : [`已停止但日志可读：${stale.join("、")}`];
+	if (services.length === 0) return ["没有正在运行的服务", ...staleLine].join("\n");
 	return [
 		`运行中 ${services.length} 个服务：`,
 		...services.map((service, index) => `${formatServiceLines(services, now)[index]}  ${service.command}`),
 		...services.map((service) => `  日志 ${service.logFile}`),
+		...staleLine,
 	].join("\n");
 }
+
+// ── 工具按需加载 ──
+
+/**
+ * 按需加载的工具。两个入口工具不在其中，它们常驻激活集：
+ *
+ * - `service_start`：唯一能凭空创造服务的入口，收回了就再也放不出来了。
+ * - `service_list`：参数是空对象，schema 成本是五个里最低的，换来「有没有服务」永远可实况回答；
+ *   它同时是下面三个带参数工具的 loader，而且它的输出正好提供了下一步要用的 name。
+ *
+ * 省下的仍然是大头：三个带参数的 schema 只在真有东西可管时才进上下文。
+ */
+export const LAZY_TOOL_NAMES = ["service_logs", "service_stop", "service_restart"] as const;
+
+const LAZY_TOOL_SET = new Set<string>(LAZY_TOOL_NAMES);
+
+/**
+ * 实况 → 该放出哪些工具。分档而不是一概全放：
+ *
+ * - 有活着的服务：三个都有意义。
+ * - 只剩日志（服务已经死了）：只有 service_logs 有意义。stop / restart 都以「存在运行中的服务」
+ *   为前提，此时放出来只会换来一句「没有名为 x 的运行中服务」，白费一个往返。
+ * - 什么都没有：一个不放。
+ */
+export function lazyToolsFor(state: { live: boolean; logs: boolean }): string[] {
+	if (state.live) return [...LAZY_TOOL_NAMES];
+	return state.logs ? ["service_logs"] : [];
+}
+
+/**
+ * 工具执行中的加载：**只增不减**。返回 undefined 表示无需改动。
+ *
+ * 1. Pi 只把纯增量变化当成 deferred loading 的信号；实况变差（服务死了）也不在会话中途收回，
+ *    它们自己会报「没有运行中的服务」，代价比作废缓存前缀小得多。
+ * 2. 只追加已注册的名字；SDK 会静默忽略未知名字，那样「没注册」和「没生效」分不清。
+ * 3. 没变化就返回 undefined；每次 setActiveTools 都会重建系统提示，空转一次的代价是真实的。
+ */
+export function planToolLoad(
+	active: readonly string[],
+	registered: readonly string[],
+	wanted: readonly string[],
+): string[] | undefined {
+	const known = new Set(registered);
+	const missing = wanted.filter((name) => known.has(name) && !active.includes(name));
+	return missing.length === 0 ? undefined : [...active, ...missing];
+}
+
+/**
+ * 会话开始时的重置：懒加载工具里只保留 `wanted`，其余收回。
+ * 这里允许删除，因为本会话还没发出任何请求；不重置反而会把上个会话（/new、/resume、reload）
+ * 的激活状态继承下来。
+ */
+export function planToolReset(
+	active: readonly string[],
+	registered: readonly string[],
+	wanted: readonly string[],
+): string[] | undefined {
+	const keep = new Set(wanted);
+	const kept = active.filter((name) => !LAZY_TOOL_SET.has(name) || keep.has(name));
+	return planToolLoad(kept, registered, wanted) ?? (kept.length === active.length ? undefined : kept);
+}
+
+// ── 命令参数 ──
 
 /** `/services` 的参数解析：`<action> [name]`，无参数视为 list。 */
 export function parseCommandArgs(args: string): { action: string; name?: string } {

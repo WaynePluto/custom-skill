@@ -10,18 +10,26 @@
  */
 
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
 	START_TIME_TOLERANCE_MS,
+	LAZY_TOOL_NAMES,
 	formatServiceLines,
 	formatServiceReport,
 	formatStatus,
 	formatUptime,
 	identify,
 	isValidName,
+	lazyToolsFor,
+	listLogNames,
 	matchesReadyLog,
 	parseCommandArgs,
+	planToolLoad,
+	planToolReset,
 	reconcile,
 	findExecutable,
 	shellDialectWarning,
@@ -199,12 +207,35 @@ test("formatServiceReport 空列表给出明确结论而不是空字符串", () 
 	assert.equal(formatServiceReport([]), "没有正在运行的服务");
 });
 
-test("formatServiceReport 含命令与日志路径", () => {
+test("formatServiceReport 没有活服务时列出可读的历史日志名", () => {
+	assert.equal(formatServiceReport([], 1_000_000, ["api", "dev"]), "没有正在运行的服务\n已停止但日志可读：api、dev");
+});
+
+test("formatServiceReport 含命令与日志路径，并只单列已停止服务的日志", () => {
 	const now = 1_000_000;
-	const report = formatServiceReport([service({ port: 5173 })], now);
+	const report = formatServiceReport([service({ port: 5173 })], now, ["api", "dev"]);
 	assert.match(report, /运行中 1 个服务/);
 	assert.match(report, /dev {2}:5173 {2}pid 1234 {2}0s {2}pnpm dev/);
 	assert.match(report, /日志 \/workspace\/\.pi\/logs\/dev\.log/);
+	assert.match(report, /已停止但日志可读：api/);
+	assert.doesNotMatch(report, /已停止但日志可读：.*dev/);
+});
+
+test("listLogNames 扫描、去后缀、排序，并忽略非日志与非法空名", () => {
+	const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "pi-services-"));
+	try {
+		const logs = path.join(cwd, ".pi", "logs");
+		fs.mkdirSync(logs, { recursive: true });
+		for (const file of ["dev.log", "api.log", "notes.txt", ".log"]) fs.writeFileSync(path.join(logs, file), "");
+		fs.mkdirSync(path.join(logs, "not-a-file.log"));
+		assert.deepEqual(listLogNames(cwd), ["api", "dev"]);
+	} finally {
+		fs.rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("listLogNames 在日志目录不存在时返回空列表", () => {
+	assert.deepEqual(listLogNames(path.join(os.tmpdir(), `pi-services-missing-${Date.now()}`)), []);
 });
 
 // ── 启动方式 ──
@@ -265,6 +296,67 @@ test("shellDialectWarning 只在 Windows 且不是 pwsh 时报警", () => {
 	} else {
 		assert.equal(shellDialectWarning("/bin/sh"), undefined);
 	}
+});
+
+// ── 工具按需加载 ──
+
+/** 已注册工具名：内置工具 + 本扩展的五个 */
+const REGISTERED = ["read", "bash", "service_start", "service_list", ...LAZY_TOOL_NAMES];
+
+const ENTRY_TOOLS = ["read", "bash", "service_start", "service_list"];
+
+test("service_start 与 service_list 常驻，只有三个带参数的管理工具懒加载", () => {
+	assert.equal(LAZY_TOOL_NAMES.includes("service_start"), false);
+	assert.equal(LAZY_TOOL_NAMES.includes("service_list"), false);
+	assert.deepEqual([...LAZY_TOOL_NAMES], ["service_logs", "service_stop", "service_restart"]);
+});
+
+test("lazyToolsFor 有活服务放三个，只有历史日志只放 service_logs", () => {
+	assert.deepEqual(lazyToolsFor({ live: true, logs: false }), [...LAZY_TOOL_NAMES]);
+	assert.deepEqual(lazyToolsFor({ live: true, logs: true }), [...LAZY_TOOL_NAMES]);
+	assert.deepEqual(lazyToolsFor({ live: false, logs: true }), ["service_logs"]);
+	assert.deepEqual(lazyToolsFor({ live: false, logs: false }), []);
+});
+
+test("planToolLoad 只追加，不动常驻工具与现有顺序", () => {
+	const next = planToolLoad(ENTRY_TOOLS, REGISTERED, LAZY_TOOL_NAMES);
+	// 前缀保持原样是关键：只有纯增量的变化才会走 deferred loading。
+	assert.deepEqual(next, [...ENTRY_TOOLS, ...LAZY_TOOL_NAMES]);
+});
+
+test("planToolLoad 只追加已注册的名字", () => {
+	assert.deepEqual(planToolLoad(ENTRY_TOOLS, [...ENTRY_TOOLS, "service_logs"], LAZY_TOOL_NAMES), [
+		...ENTRY_TOOLS,
+		"service_logs",
+	]);
+});
+
+test("planToolLoad 不重复追加，并在无变化时返回 undefined", () => {
+	assert.deepEqual(planToolLoad([...ENTRY_TOOLS, "service_logs"], REGISTERED, LAZY_TOOL_NAMES), [
+		...ENTRY_TOOLS,
+		"service_logs",
+		"service_stop",
+		"service_restart",
+	]);
+	assert.equal(planToolLoad([...ENTRY_TOOLS, ...LAZY_TOOL_NAMES], REGISTERED, LAZY_TOOL_NAMES), undefined);
+});
+
+test("planToolReset 收回懒加载工具，但始终保留 service_start / service_list 与其它扩展工具", () => {
+	const active = ["read", "service_logs", "service_list", "other_tool", "service_stop", "service_start"];
+	assert.deepEqual(planToolReset(active, [...REGISTERED, "other_tool"], []), [
+		"read",
+		"service_list",
+		"other_tool",
+		"service_start",
+	]);
+});
+
+test("planToolReset 可按实况保留部分工具，无需变化时返回 undefined", () => {
+	assert.deepEqual(planToolReset([...ENTRY_TOOLS, ...LAZY_TOOL_NAMES], REGISTERED, ["service_logs"]), [
+		...ENTRY_TOOLS,
+		"service_logs",
+	]);
+	assert.equal(planToolReset(ENTRY_TOOLS, REGISTERED, []), undefined);
 });
 
 // ── 命令参数 ──

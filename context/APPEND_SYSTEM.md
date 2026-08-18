@@ -26,6 +26,8 @@
 
 仅当当前会话提供了 `service_start` 等 `service_*` 工具时适用；没有这些工具时忽略本节。
 
+先用 `service_list` 查服务与历史日志实况；它会按需放出 `service_logs` / `service_stop` / `service_restart`。
+
 - 判据只有一条：**命令会不会自己退出**。会退出的走 Shell（`pnpm build`、`pnpm test`、`git`、一次性脚本）；不会退出的走 `service_start`（`pnpm dev`、`npm start`、后端服务、`--watch` 监听、`docker compose up`）。
 - 不要用 Shell 启动常驻命令：Shell 会一直等到超时，既拿不到结果也占住了对话。也不要用 Shell 里的后台写法（`Start-Process`、`&`、`nohup`）绕过去：那样起的进程没有注册表也没有日志，之后你和用户都找不到它。
 - 启动时尽量给出就绪判据：监听端口就传 `port`，否则用 `readyLog` 给一条日志正则。两者都没有时只能靠固定等待，容易把「还没起来」误判成「起来了」。

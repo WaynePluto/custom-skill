@@ -23,6 +23,14 @@
  * 安全约束：pid 会被操作系统复用，「pid 还活着」不等于「还是我们那个进程」。
  * 所有会杀进程的路径都先比对进程创建时间，比对不上或比对不了就拒绝执行，
  * 详见 core.ts 的 identify()。
+ *
+ * 工具按需加载（Pi 的 Dynamic Tool Loading）：五个工具全部注册，初始只激活两个入口：
+ * service_start 负责创造服务；零参数、低 schema 成本的 service_list 负责查实况。二者都能把
+ * service_logs / service_stop / service_restart 纯增量地追加进激活集，Pi 会把新增工具名记在
+ * 本次工具结果上，支持 deferred loading 的模型据此在结果位置加载定义，不动缓存前缀。
+ * 会话开始一律收回三个懒加载工具；先 list 再按实况放出，有活服务放三个，只有历史日志只放 logs。
+ * 三个懒加载工具刻意不带 promptSnippet / promptGuidelines —— 那类元数据会重建系统提示，
+ * 反而把 deferred loading 想省下的缓存收益吃掉，它们的用途由 description 自带说明。
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -36,8 +44,12 @@ import {
 	identify,
 	isValidName,
 	killTree,
+	lazyToolsFor,
+	listLogNames,
 	logPath,
 	parseCommandArgs,
+	planToolLoad,
+	planToolReset,
 	readRegistry,
 	readText,
 	reconcile,
@@ -166,10 +178,25 @@ async function start(
 }
 
 export default function (pi: ExtensionAPI) {
-	// 每次会话开始都重新对齐一次：上一次会话结束后服务可能已经被手动关掉，
-	// 也可能还活着（这正是 detached 的意义），注册表必须以进程实况为准。
+	const registeredTools = (): string[] => pi.getAllTools().map((tool) => tool.name);
+
+	/** 工具执行中只追加：这是 Pi 识别 deferred loading 的信号。 */
+	const loadTools = (wanted: readonly string[]): void => {
+		const next = planToolLoad(pi.getActiveTools(), registeredTools(), wanted);
+		if (next) pi.setActiveTools(next);
+	};
+
+	/** 会话边界可以收回：此时还没有请求缓存需要保护。 */
+	const resetTools = (wanted: readonly string[]): void => {
+		const next = planToolReset(pi.getActiveTools(), registeredTools(), wanted);
+		if (next) pi.setActiveTools(next);
+	};
+
+	// 每次会话开始都重新对齐一次 UI 与注册表实况，但一律只留下两个入口工具。
+	// startup / reload / new / resume / fork 都走这里，防止继承上个会话已放出的工具。
 	pi.on("session_start", (_event, ctx) => {
 		refresh(ctx as unknown as Ctx);
+		resetTools([]);
 	});
 
 	pi.registerTool({
@@ -178,10 +205,12 @@ export default function (pi: ExtensionAPI) {
 		description:
 			"Start a long-running service (dev server, backend, watcher) as a detached background process and return immediately. " +
 			"Output is written to .pi/logs/<name>.log; the process survives this tool call, this session and pi itself. " +
-			"Use this instead of bash for any command that does not exit on its own.",
-		// promptSnippet 不是可选装饰：不提供时自定义工具不会出现在系统提示的
-		// Available tools 清单里，模型在规划阶段就想不起来有这个能力。
-		promptSnippet: "Start a long-running command as a detached background process; returns immediately instead of waiting for exit",
+			"Use this instead of bash for any command that does not exit on its own. " +
+			"Calling this tool also loads the relevant logging, stopping and restarting tools when useful.",
+		// 两个入口工具有固定的 promptSnippet；三个懒加载工具自己不带，避免加载时重建系统提示。
+		promptSnippet:
+			"Start a long-running command as a detached background process; returns immediately instead of waiting for exit, " +
+			"and loads the relevant service management tools when useful",
 		parameters: Type.Object({
 			name: Type.String({ description: "Unique service name, also used as the log file name" }),
 			command: Type.String({ description: "Shell command to run, e.g. 'pnpm dev'" }),
@@ -203,7 +232,12 @@ export default function (pi: ExtensionAPI) {
 			),
 		}),
 		async execute(_id, params, _signal, _onUpdate, ctx) {
-			return text(await start(ctx as unknown as Ctx, params));
+			const context = ctx as unknown as Ctx;
+			const result = await start(context, params);
+			// start() 的所有落盘与清理已经完成，直接读最终注册表即可；不用再 spawn 一轮进程探测。
+			const logs = listLogNames(context.cwd);
+			loadTools(lazyToolsFor({ live: readRegistry(context.cwd).services.length > 0, logs: logs.length > 0 }));
+			return text(result);
 		},
 	});
 
@@ -211,20 +245,26 @@ export default function (pi: ExtensionAPI) {
 		name: "service_list",
 		label: "List services",
 		description:
-			"List the services started through service_start that are still running, with pid, port, uptime and log path. " +
-			"Entries whose process is gone are pruned from the registry.",
-		promptSnippet: "List running background services with pid, port, uptime and log path",
+			"List running services and logs left by stopped services. This is the live source of truth for whether services " +
+			"exist; it also loads service_logs, service_stop and service_restart when the result makes them useful.",
+		promptSnippet:
+			"List running services and stopped-service logs; loads logging, stopping and restarting tools when useful",
 		parameters: Type.Object({}),
 		async execute(_id, _params, _signal, _onUpdate, ctx) {
-			return text(formatServiceReport(refresh(ctx as unknown as Ctx)));
+			const context = ctx as unknown as Ctx;
+			const services = refresh(context);
+			const logs = listLogNames(context.cwd);
+			loadTools(lazyToolsFor({ live: services.length > 0, logs: logs.length > 0 }));
+			return text(formatServiceReport(services, Date.now(), logs));
 		},
 	});
 
 	pi.registerTool({
 		name: "service_logs",
 		label: "Read service logs",
-		description: "Return the tail of a running service's log file.",
-		promptSnippet: "Read the tail of a background service's log file",
+		description:
+			"Return the tail of a service's log file. Also works for a service that already exited, " +
+			"which is the fastest way to find out why it died.",
 		parameters: Type.Object({
 			name: Type.String({ description: "Service name" }),
 			lines: Type.Optional(Type.Number({ description: `Number of trailing lines (default ${DEFAULT_LOG_LINES})` })),
@@ -246,7 +286,6 @@ export default function (pi: ExtensionAPI) {
 		description:
 			"Stop a service started by service_start, killing its whole process tree. " +
 			"Refuses to act when the recorded pid can no longer be confirmed to be that service.",
-		promptSnippet: "Stop a background service and its whole process tree",
 		parameters: Type.Object({ name: Type.String({ description: "Service name" }) }),
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			return text(stop(ctx as unknown as Ctx, params.name));
@@ -256,8 +295,9 @@ export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "service_restart",
 		label: "Restart service",
-		description: "Stop a running service and start it again with the command recorded at start time.",
-		promptSnippet: "Restart a background service with the command recorded at start time",
+		description:
+			"Stop a running service and start it again with the command recorded at start time. " +
+			"Use this after changing code that the service must pick up, instead of pairing service_stop with service_start.",
 		parameters: Type.Object({
 			name: Type.String({ description: "Service name" }),
 			readyTimeoutMs: Type.Optional(Type.Number({ description: "Readiness probe timeout in ms (default 8000)" })),
@@ -289,7 +329,7 @@ export default function (pi: ExtensionAPI) {
 			const context = ctx as unknown as Ctx;
 			const { action, name } = parseCommandArgs(args);
 			if (action === "list") {
-				context.ui.notify(formatServiceReport(refresh(context)), "info");
+				context.ui.notify(formatServiceReport(refresh(context), Date.now(), listLogNames(context.cwd)), "info");
 				return;
 			}
 			if (!name) {

@@ -95,7 +95,7 @@ pnpm test             # 跑全部静态测试（Node + Python）
 | [notify](extensions/notify.ts) | 事件钩子 | 任务完成提醒 |
 | [enable-core-tools](extensions/enable-core-tools.ts) | 事件钩子 | 把 SDK registry 里的 `grep` / `find` / `ls` 补进激活集 |
 | [tools-status](extensions/tools-status.ts) | `/tools-status` | 本会话各工具的调用 / 完成 / 出错次数 |
-| [services](extensions/services/) | `service_start` `service_list` `service_logs` `service_stop` `service_restart` · `/services` | 常驻服务（dev server、后端、watcher）的后台启动与管理 |
+| [services](extensions/services/) | `service_start` `service_list`（常驻 loader）· `service_logs` `service_stop` `service_restart`（按需加载）· `/services` | 常驻服务（dev server、后端、watcher）的后台启动与管理 |
 
 ### services
 
@@ -108,6 +108,16 @@ pnpm test             # 跑全部静态测试（Node + Python）
 - 运行中的服务经 `ctx.ui.setStatus` / `ctx.ui.setWidget` 展示，两者都是 SDK 原生、宿主无关的接口：
   CLI 画在 footer 与编辑器上方，pi-agent-chat 画在状态行与输入框上方，扩展本身不依赖任何特定宿主
 - 用户通道是 `/services list | logs <name> | stop <name> | restart <name>`，与模型用的工具共用同一份实现
+
+**工具按需加载**（Pi 的 Dynamic Tool Loading）：五个工具全部注册，初始只激活两个入口 loader。
+`service_start` 负责创造服务；零参数、低 schema 成本的 `service_list` 负责查实况，并把已停止服务的
+可读日志名也列出来。二者按结果用 `pi.setActiveTools()` **纯增量**追加另外三个工具：有活服务时放出
+`service_logs` / `service_stop` / `service_restart`，只有历史日志时仅放出 `service_logs`，什么都没有就不放。
+Pi 把新增工具名记在本次工具结果上；支持 deferred loading 的模型在结果位置加载定义，不动缓存前缀，
+其它模型在下一次请求的工具列表里拿到。会话开始一律收回三个懒加载工具，避免继承上个会话的状态。
+三个懒加载工具刻意不带 `promptSnippet` / `promptGuidelines`：那类元数据会重建系统提示，反而吃掉缓存收益。
+纯逻辑在 `core.ts` 的 `lazyToolsFor()` / `planToolLoad()` / `planToolReset()`，有静态测试覆盖。
+用户通道 `/services` 不受影响：命令不是工具，任何时候都可用。
 
 **pid 安全**：操作系统会复用 pid，所以「pid 还活着」不等于「还是我们那个进程」。
 所有会杀进程的路径都先比对进程创建时间：对不上就从注册表剔除，比对不了则**拒绝自动停止**并把手动命令告知用户——
