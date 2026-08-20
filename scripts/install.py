@@ -650,7 +650,7 @@ def main() -> None:
         help="覆盖已存在的文件（不影响二进制：rg/fd 升级始终需要交互确认）",
     )
     parser.add_argument("--skills", action="store_true", help="安装技能")
-    parser.add_argument("--context", action="store_true", help="部署 context 文件（如 SYSTEM.md、APPEND_SYSTEM.md）")
+    parser.add_argument("--context", action="store_true", help="部署 context 文件（如 APPEND_SYSTEM.md）")
     parser.add_argument("--extensions", action="store_true", help="部署扩展")
     parser.add_argument(
         "--binaries", action="store_true",
