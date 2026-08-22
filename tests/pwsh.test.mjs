@@ -118,6 +118,14 @@ test("入口注册 pwsh，但绝不调用 setActiveTools 或覆盖 bash", () => 
 	assert.doesNotMatch(source, /name:\s*"bash"/);
 });
 
+test("执行 cwd 取自 ctx.cwd，不在加载时固化 process.cwd()", () => {
+	// createBashToolDefinition 的第一个参数在扩展加载时被闭包固化。process.cwd() 只在 CLI
+	// 宿主碰巧等于项目目录；在嵌入宿主（如 pi-agent-chat 的 VS Code 扩展进程）里它指向宿主
+	// 安装目录，每条命令都会落在项目外。execute 必须按次用 ctx.cwd 重建定义。
+	const source = fs.readFileSync(new URL("../extensions/pwsh/pwsh.ts", import.meta.url), "utf8");
+	assert.match(source, /createBashToolDefinition\(ctx\.cwd/);
+});
+
 test("目录 package.json 只声明 pwsh.ts 为扩展入口", () => {
 	const packageJson = JSON.parse(
 		fs.readFileSync(new URL("../extensions/pwsh/package.json", import.meta.url), "utf8"),

@@ -32,9 +32,8 @@ export default function (pi: ExtensionAPI): void {
 		return;
 	}
 
-	const base = createBashToolDefinition(process.cwd(), {
-		shellPath: diagnostic.executable,
-	});
+	const shellPath = diagnostic.executable;
+	const base = createBashToolDefinition(process.cwd(), { shellPath });
 
 	pi.registerTool({
 		...base,
@@ -47,6 +46,14 @@ export default function (pi: ExtensionAPI): void {
 		promptSnippet: "Execute PowerShell 7 commands in the current working directory",
 		promptGuidelines: ["Commands passed to pwsh must use PowerShell 7 syntax, not Bash or CMD syntax."],
 		parameters: PWSH_PARAMETERS,
+		// 执行 cwd 必须取 ctx.cwd（调用时从当前会话解析）：createBashToolDefinition 的第一个
+		// 参数在加载时固化，而 process.cwd() 只在 CLI 宿主碰巧等于项目目录；在嵌入宿主
+		// （pi-agent-chat 的 VS Code 扩展进程）里它指向宿主安装目录，每条命令都会落在项目外。
+		// 这里按次重建定义，其余（流式/取消/超时/截断/环境注入）全部复用 base 的实现。
+		async execute(toolCallId, input, signal, onUpdate, ctx) {
+			const live = createBashToolDefinition(ctx.cwd, { shellPath });
+			return live.execute(toolCallId, input, signal, onUpdate, ctx);
+		},
 		renderCall(args, theme, context) {
 			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
 			const command = typeof args?.command === "string" ? args.command : "...";
