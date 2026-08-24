@@ -119,11 +119,21 @@ test("入口注册 pwsh，但绝不调用 setActiveTools 或覆盖 bash", () => 
 });
 
 test("执行 cwd 取自 ctx.cwd，不在加载时固化 process.cwd()", () => {
-	// createBashToolDefinition 的第一个参数在扩展加载时被闭包固化。process.cwd() 只在 CLI
-	// 宿主碰巧等于项目目录；在嵌入宿主（如 pi-agent-chat 的 VS Code 扩展进程）里它指向宿主
-	// 安装目录，每条命令都会落在项目外。execute 必须按次用 ctx.cwd 重建定义。
+	// 工厂（createPowerShellToolDefinition）的第一个参数在扩展加载时被闭包固化。process.cwd()
+	// 只在 CLI 宿主碰巧等于项目目录；在嵌入宿主（如 pi-agent-chat 的 VS Code 扩展进程）里它
+	// 指向宿主安装目录，每条命令都会落在项目外。execute 必须按次用 ctx.cwd 重建定义。
 	const source = fs.readFileSync(new URL("../extensions/pwsh/pwsh.ts", import.meta.url), "utf8");
-	assert.match(source, /createBashToolDefinition\(ctx\.cwd/);
+	assert.match(source, /createPowerShellToolDefinition\(ctx\.cwd\)/);
+});
+
+test("基于内置 powershell 工具构建，不再经内置 bash 工具传 shellPath", () => {
+	// bash 工具对自定义 shellPath 统一用 `-c` 启动：不带 -NoProfile，用户 profile 每条命令
+	// 都会加载（报错进结果、拖慢执行）。内置 powershell 工具的参数集
+	// （-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command）与 UTF-8 输出前缀
+	// 修复了这两点，禁止退回 createBashToolDefinition + shellPath 的旧接线。
+	const source = fs.readFileSync(new URL("../extensions/pwsh/pwsh.ts", import.meta.url), "utf8");
+	assert.match(source, /createPowerShellToolDefinition\(process\.cwd\(\)\)/);
+	assert.doesNotMatch(source, /createBashToolDefinition/);
 });
 
 test("目录 package.json 只声明 pwsh.ts 为扩展入口", () => {
