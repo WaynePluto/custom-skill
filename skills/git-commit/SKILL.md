@@ -95,41 +95,15 @@ style: 删除调试日志
    git diff
    ```
 
-2. **按逻辑变更提交**
+2. **一次性提交全部改动**
 
-   **默认行为**：以「逻辑变更」为单位提交，一个 commit 对应一个可独立理解的目的，而不是按「文件数量」或「批次」机械拆分。注意到 agent 一次任务常改动大量文件，因此需先判断本次改动包含几个逻辑目的，据此决定一个还是多个 commit。
+   每次提交必须把本地全部改动一次性提交到一个 commit 中，**不拆分 commit**。
 
-   **判为同一个逻辑变更 → 合并为单个 commit**：
-
-   - 所有改动服务于同一目的（如"把全项目 `console.log` 换成 logger"，即使涉及几十个文件）
-   - 某个改动离开后续 commit 就无意义（如为新功能做的准备性重构），强行拆开会导致不可独立理解
-   - 改动本身就是单一、内聚的任务，无法在一条 commit message 里再细分出独立目的
-
-   **判为多个逻辑变更 → 拆成多个 commit**：
-
-   - 改动包含明显独立的目的（重构 + 新功能 + 配置调整 + bug 修复混在一起）
-   - 某一部分未来可能需要单独 `revert` / review / bisect
-   - 体量大到无法用一条 commit message 说清楚在做什么
-
-   > 反例：把多个不相关的改动混进一个 commit，导致历史难以回退和审查。**禁止的是「把不相关改动混作一团」，而不是「一次提交大量文件」**——服务于同一目的的大改动合并提交是正确的。
+   无论改动涉及多少个文件、包含多少种不同的目的（重构 + 新功能 + 配置调整 + bug 修复），都合并为单一 commit。
 
    ```shell
-   # 单一逻辑变更：虽然改动很多文件，仍是一个 commit
    git add -A
-   git commit -m "refactor: 全项目日志改用 logger"
-
-   # 多个逻辑变更：按目的分多个 commit
-   # 第一批：重构相关的文件
-   git add path/to/refactored/files
-   git commit -m "refactor: 重构 XXX 模块"
-
-   # 第二批：新功能相关的文件
-   git add path/to/new/feature/files
-   git commit -m "feat: 添加 YYY 功能"
-
-   # 第三批：配置文件、文档等
-   git add path/to/config/files
-   git commit -m "chore: 更新配置文件"
+   git commit -m "<type>: <subject>"
    ```
 
 3. **确认 commit**
@@ -195,6 +169,7 @@ git commit -m "refactor: 重构暂停菜单为游戏内弹窗" -m @"
 
 ## 注意事项
 
+- ✅ **一次性提交全部本地改动**：把本次所有改动作为一个 commit 提交，不按逻辑、文件或批次拆分。
 - ❌ 不要使用 `git commit -am`（容易误添加不该提交的文件）
 - ❌ PowerShell 7 中不要使用 bash 的 HEREDOC（`$(cat <<'EOF' ... EOF)`），会触发 `ParserError`；多行 message 改用多个 `-m` 或 here-string（见“创建 commit”）
 - ❌ 扩展 here-string `@"..."@` 中的反引号和 `$` 会被转义/展开，导致 commit message body 乱码。需保留字面量（如行内代码 `\`xxx`\``）时改用字面 here-string `@'...'@`，或避免在 body 中使用反引号
