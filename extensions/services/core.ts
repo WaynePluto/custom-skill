@@ -52,22 +52,22 @@ export const START_TIME_TOLERANCE_MS = 60_000;
 // ── 路径 ──
 
 export function registryPath(cwd: string): string {
-	return path.join(cwd, ".pi", "services.json");
+	return path.join(cwd, ".agents", "services.json");
 }
 
 export function logPath(cwd: string, name: string): string {
-	return path.join(cwd, ".pi", "logs", `${name}.log`);
+	return path.join(cwd, ".agents", "logs", `${name}.log`);
 }
 
 /**
- * `.pi/logs/` 下的服务名（去掉 `.log` 后缀）。
+ * `.agents/logs/` 下的服务名（去掉 `.log` 后缀）。
  * 一份扫描两个用途：判断值不值得放出 `service_logs`，以及在报告里告诉调用方有哪些日志可读。
  * 只放工具不给名字，调用方根本不知道该传什么 name。
  */
 export function listLogNames(cwd: string): string[] {
 	try {
 		return fs
-			.readdirSync(path.join(cwd, ".pi", "logs"), { withFileTypes: true })
+			.readdirSync(path.join(cwd, ".agents", "logs"), { withFileTypes: true })
 			.filter((entry) => entry.isFile() && entry.name.endsWith(".log"))
 			.map((entry) => entry.name.slice(0, -".log".length))
 			.filter(isValidName)

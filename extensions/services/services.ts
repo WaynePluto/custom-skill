@@ -11,7 +11,7 @@
  * 用户想手动关也找不到。
  *
  * 做法是把「后台执行 + 句柄 + 单独读日志」这三件事补齐：
- * detached 起进程、日志落 `.pi/logs/<name>.log`、注册表落 `.pi/services.json`，
+ * detached 起进程、日志落 `.agents/logs/<name>.log`、注册表落 `.agents/services.json`，
  * 工具调用立刻返回，不阻塞对话。
  *
  * 呈现只用 SDK 原生、宿主无关的接口：
@@ -202,7 +202,7 @@ export default function (pi: ExtensionAPI) {
 		label: "Start service",
 		description:
 			"Start a long-running service (dev server, backend, watcher) as a detached background process and return immediately. " +
-			"Output is written to .pi/logs/<name>.log; the process survives this tool call, this session and pi itself. " +
+			"Output is written to .agents/logs/<name>.log; the process survives this tool call, this session and pi itself. " +
 			"Use this instead of bash for any command that does not exit on its own. " +
 			"Calling this tool also loads the relevant logging, stopping and restarting tools when useful.",
 		// 两个入口工具有固定的 promptSnippet；三个懒加载工具自己不带，避免加载时重建系统提示。
