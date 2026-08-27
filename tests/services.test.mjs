@@ -20,7 +20,6 @@ import {
 	LAZY_TOOL_NAMES,
 	formatServiceLines,
 	formatServiceReport,
-	formatStatus,
 	formatUptime,
 	identify,
 	isValidName,
@@ -197,10 +196,15 @@ test("formatServiceLines 每个服务一行，端口可选", () => {
 	assert.deepEqual(lines, ["dev  :5173  pid 1234  16m", "api  pid 9  0s"]);
 });
 
-test("formatStatus 在没有服务时返回 undefined，以便调用方清除状态行", () => {
-	assert.equal(formatStatus([]), undefined);
-	assert.equal(formatStatus([service()]), "▶ 1 service");
-	assert.equal(formatStatus([service(), service({ name: "api" })]), "▶ 2 services");
+/**
+ * 状态行（footer）已有 token / 费用等内置统计，服务清单在 widget 里完整可见；
+ * 锁住「不占状态行」的决定，防止以后有人把计数加回去。
+ */
+test("服务清单只走 widget，不占状态行（不用 setStatus）", () => {
+	const source = fs.readFileSync(new URL("../extensions/services/services.ts", import.meta.url), "utf8");
+	// 只禁实际调用；注释里解释「为什么不用」的提及不受限。
+	assert.doesNotMatch(source, /ui\.setStatus\(/);
+	assert.match(source, /ui\.setWidget\(/);
 });
 
 test("formatServiceReport 空列表给出明确结论而不是空字符串", () => {

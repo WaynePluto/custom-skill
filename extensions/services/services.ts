@@ -15,10 +15,11 @@
  * 工具调用立刻返回，不阻塞对话。
  *
  * 呈现只用 SDK 原生、宿主无关的接口：
- * - `ctx.ui.setStatus` —— CLI 画在 footer，pi-agent-chat 画在状态行
- * - `ctx.ui.setWidget` —— CLI 画在编辑器上方，pi-agent-chat 画在输入框上方
+ * - `ctx.ui.setWidget` —— CLI 画在编辑器上方，pi-agent-chat 画在输入框上方（可折叠面板）
  * - `ctx.ui.notify`    —— CLI 走状态区，pi-agent-chat 走对话流卡片
  * 因此这个扩展不依赖任何特定宿主，CLI 与 GUI 的能力完全一致。
+ * 刻意不用 `ctx.ui.setStatus`（footer 状态行）：那里已有 token / 费用等内置统计，
+ * 服务清单在 widget 里完整可见，再放一个「▶ N services」计数只是重复信息。
  *
  * 安全约束：pid 会被操作系统复用，「pid 还活着」不等于「还是我们那个进程」。
  * 所有会杀进程的路径都先比对进程创建时间，比对不上或比对不了就拒绝执行，
@@ -40,7 +41,6 @@ import {
 	type ServiceRecord,
 	formatServiceLines,
 	formatServiceReport,
-	formatStatus,
 	identify,
 	isValidName,
 	killTree,
@@ -60,7 +60,7 @@ import {
 	writeRegistry,
 } from "./core.ts";
 
-/** 注册表与 UI 共用的 key；同一个 key 重复 set 即替换。 */
+/** 注册表与 widget 共用的 key；同一个 key 重复 set 即替换。 */
 const SURFACE_KEY = "services";
 
 const DEFAULT_READY_TIMEOUT_MS = 8000;
@@ -71,18 +71,16 @@ interface Ctx {
 	cwd: string;
 	ui: {
 		notify(message: string, level?: "info" | "warning" | "error"): void;
-		setStatus(key: string, text: string | undefined): void;
 		setWidget(key: string, content: string[] | undefined): void;
 	};
 }
 
 const text = (value: string) => ({ content: [{ type: "text" as const, text: value }], details: {} });
 
-/** 注册表对齐操作系统实况，并把结果推到状态行与 widget。 */
+/** 注册表对齐操作系统实况，并把结果推到 widget。 */
 function refresh(ctx: Ctx): ServiceRecord[] {
 	const { live, dropped } = reconcile(readRegistry(ctx.cwd).services, (record) => identify(record));
 	if (dropped.length > 0) writeRegistry(ctx.cwd, live);
-	ctx.ui.setStatus(SURFACE_KEY, formatStatus(live));
 	ctx.ui.setWidget(SURFACE_KEY, live.length === 0 ? undefined : formatServiceLines(live));
 	return live;
 }

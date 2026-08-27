@@ -456,12 +456,6 @@ export function formatServiceLines(services: ServiceRecord[], now = Date.now()):
 	});
 }
 
-/** 状态行用：一行讲完，窄面板也读得出。 */
-export function formatStatus(services: ServiceRecord[]): string | undefined {
-	if (services.length === 0) return undefined;
-	return `\u25b6 ${services.length} service${services.length === 1 ? "" : "s"}`;
-}
-
 /**
  * 报告用：服务列表加日志文件位置。
  * `logNames` 中没在运行的那些单独列一行；服务死后唯一能做的事就是读日志，而读日志需要名字。
