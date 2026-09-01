@@ -45,7 +45,7 @@ const service = (overrides = {}) => ({
 	cwd: "/workspace",
 	pid: 1234,
 	startedAt: 1_000_000,
-	logFile: "/workspace/.pi/logs/dev.log",
+	logFile: "/workspace/.agents/logs/dev.log",
 	...overrides,
 });
 
@@ -220,7 +220,7 @@ test("formatServiceReport 含命令与日志路径，并只单列已停止服务
 	const report = formatServiceReport([service({ port: 5173 })], now, ["api", "dev"]);
 	assert.match(report, /运行中 1 个服务/);
 	assert.match(report, /dev {2}:5173 {2}pid 1234 {2}0s {2}pnpm dev/);
-	assert.match(report, /日志 \/workspace\/\.pi\/logs\/dev\.log/);
+	assert.match(report, /日志 \/workspace\/\.agents\/logs\/dev\.log/);
 	assert.match(report, /已停止但日志可读：api/);
 	assert.doesNotMatch(report, /已停止但日志可读：.*dev/);
 });
@@ -228,7 +228,7 @@ test("formatServiceReport 含命令与日志路径，并只单列已停止服务
 test("listLogNames 扫描、去后缀、排序，并忽略非日志与非法空名", () => {
 	const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "pi-services-"));
 	try {
-		const logs = path.join(cwd, ".pi", "logs");
+		const logs = path.join(cwd, ".agents", "logs");
 		fs.mkdirSync(logs, { recursive: true });
 		for (const file of ["dev.log", "api.log", "notes.txt", ".log"]) fs.writeFileSync(path.join(logs, file), "");
 		fs.mkdirSync(path.join(logs, "not-a-file.log"));
