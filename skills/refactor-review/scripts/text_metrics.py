@@ -195,21 +195,33 @@ def check_comment_language(data: list[FileData]) -> Check:
                  '0 条', not bad, f'{len(bad)} 条非中文注释', bad)
 
 
-def _overlong_runs(comments: list[tuple[int, str, bool]], limit: int) -> list[tuple[int, int]]:
-    """找出超过 limit 的连续整行注释块，返回 (起始行, 长度)。"""
-    runs, start, length, prev = [], None, 0, None
+def _is_doc_annotation(text: str, raw_line: str) -> bool:
+    """判断注释行是否属于文档注解（Swagger、JSDoc/Javadoc、XML 文档注释等）。"""
+    s = raw_line.lstrip()
+    if s.startswith('/**') or s.startswith('///'):
+        return True
+    t = text.strip().lstrip('*').strip()
+    return t.startswith('@') and len(t) > 1 and not t[1].isspace()
+
+
+def _overlong_runs(comments: list[tuple[int, str, bool]], limit: int,
+                   raw_lines: list[str]) -> list[tuple[int, int]]:
+    """找出超过 limit 的连续整行注释块，返回 (起始行, 长度)；文档注解块整体豁免。"""
+    runs, start, length, prev, doc = [], None, 0, None, False
 
     def close():
-        if start is not None and length > limit:
+        if start is not None and length > limit and not doc:
             runs.append((start, length))
 
-    for lineno, _text, full in comments:
+    for lineno, text, full in comments:
         if full:
             if prev is not None and lineno == prev + 1:
                 length += 1
             else:
                 close()
-                start, length = lineno, 1
+                start, length, doc = lineno, 1, False
+            if _is_doc_annotation(text, raw_lines[lineno - 1]):
+                doc = True
             prev = lineno
         else:
             close()
@@ -219,10 +231,10 @@ def _overlong_runs(comments: list[tuple[int, str, bool]], limit: int) -> list[tu
 
 
 def check_comment_run(data: list[FileData], cfg: Config) -> Check:
-    """连续整行注释过长说明该写 docstring/文档，而不是成段注释。"""
+    """连续整行注释过长说明该写 docstring/文档；文档注解块（Swagger 等）豁免。"""
     bad = []
     for d in data:
-        for start, length in _overlong_runs(d.comments, cfg.max_comment_run):
+        for start, length in _overlong_runs(d.comments, cfg.max_comment_run, d.lines):
             bad.append(f'{d.rel}:{start}: 连续注释 {length} 行')
     return Check('comment-run', '超长注释块', '注释规范', len(bad),
                  f'连续 ≤ {cfg.max_comment_run} 行', not bad,

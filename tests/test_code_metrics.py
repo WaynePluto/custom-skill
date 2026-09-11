@@ -139,6 +139,16 @@ class TextMetricsTest(TempDirTest):
         self.assertEqual(check.value, 1)
         self.assertIn('bad.py', check.items[0])
 
+    def test_comment_run_doc_annotation_exempt(self):
+        # 文档注解块不受 10 行限制：swag 风格 @ 标签块、Javadoc /** */ 块均豁免
+        swag = '\n'.join(['// 创建订单', '// @Summary 创建订单', '// @Router /orders [post]']
+                        + [f'// @Param p{i} 参数 {i}' for i in range(12)])
+        javadoc = '\n'.join(['/**'] + [f' * 说明 {i}' for i in range(15)] + [' */'])
+        self.write('swag.go', f'{swag}\nfunc A() {{}}\n')
+        self.write('doc.java', f'{javadoc}\nvoid B() {{}}\n')
+        check = text_metrics.check_comment_run(scan(self.root), Config())
+        self.assertTrue(check.passed)
+
     def test_domain_io(self):
         self.write('core/logic.py', 'def run():\n    print("结果")\n')
         self.write('app.py', 'def main():\n    print("入口")\n')
