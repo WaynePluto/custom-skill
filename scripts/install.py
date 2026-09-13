@@ -532,6 +532,169 @@ def deploy_extensions(pi_agent_dir: Path, force: bool) -> None:
         print(f"  {src.name} → {dest}")
 
 
+# ── Browser harness ──
+
+# browser-harness（github.com/browser-use/browser-harness）以 uv tool 形式安装。
+# SKILL.md 由 `browser-harness skill` 生成：仓库副本进 Git，便于审查版本间的工作流变化；
+# 全局副本由本段直接刷新，保证 sync / sync:force 都能拿到最新版。
+BROWSER_HARNESS = "browser-harness"
+BROWSER_HARNESS_PYTHON = "3.12"
+
+
+def parse_uv_tool_list(output: str) -> dict[str, str]:
+    """解析 `uv tool list` 输出为 {包名: 版本}。
+
+    每个已安装工具形如 "browser-harness v0.5.3"，其后的缩进行是可执行文件名。
+    """
+    tools: dict[str, str] = {}
+    for line in output.splitlines():
+        if not line or line[0].isspace():
+            continue
+        parts = line.split()
+        if len(parts) >= 2 and parts[1].startswith("v"):
+            tools[parts[0]] = parts[1].lstrip("v")
+    return tools
+
+
+def apply_skill_overrides(text: str, overrides: dict[str, str]) -> str:
+    """把 overrides 应用到 SKILL.md 的 frontmatter。
+
+    frontmatter 内同名 key 整行替换，缺失的 key 插入到 frontmatter 末尾，正文不动。
+    用于把官方生成的 name/description 换成本仓库审定的版本（AGENTS.md 要求
+    description 必须说明何时使用与何时不使用，官方默认的 "Always use ..." 不满足）。
+    """
+    def quoted(value: str) -> str:
+        return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        front = ["---", *[f"{k}: {quoted(v)}" for k, v in overrides.items()], "---", ""]
+        return "\n".join(front) + text
+
+    closing = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if closing is None:
+        return text
+
+    remaining = dict(overrides)
+    for i in range(1, closing):
+        matched = re.match(r"^([A-Za-z][\w-]*)\s*:", lines[i])
+        if matched and matched.group(1) in remaining:
+            key = matched.group(1)
+            lines[i] = f"{key}: {quoted(remaining.pop(key))}"
+
+    for offset, (key, value) in enumerate(remaining.items()):
+        lines.insert(closing + offset, f"{key}: {quoted(value)}")
+    return "\n".join(lines)
+
+
+def uv_executable() -> str | None:
+    return shutil.which("uv") or shutil.which("uv.exe")
+
+
+def browser_harness_bin(uv: str) -> Path | None:
+    """定位 uv 安装的 browser-harness 可执行文件。
+
+    uv 安装后不保证其 bin 目录已在当前进程的 PATH 上，PATH 找不到时
+    回落到 `uv tool dir --bin`，再回落到 uv 的默认位置 ~/.local/bin。
+    """
+    suffix = ".exe" if sys.platform == "win32" else ""
+    found = shutil.which(BROWSER_HARNESS)
+    if found:
+        return Path(found)
+
+    candidates: list[Path] = []
+    try:
+        result = subprocess.run([uv, "tool", "dir", "--bin"], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0 and result.stdout.strip():
+            candidates.append(Path(result.stdout.strip()))
+    except Exception:
+        pass  # 回落到默认位置
+    candidates.append(Path.home() / ".local" / "bin")
+
+    for directory in candidates:
+        candidate = directory / (BROWSER_HARNESS + suffix)
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def deploy_browser_harness(skills_dir: Path) -> None:
+    """安装/升级 browser-harness，并把生成的 SKILL.md 同步到仓库与全局技能目录。
+
+    与 rg/fd 不同，升级不经交互确认直接执行：sync 即升级是用户明确要求的语义。
+    任何失败只跳过本段，不中断其它内容的部署。
+    """
+    print(f"\n{'═' * 4} {BROWSER_HARNESS} {'═' * 4}")
+
+    uv = uv_executable()
+    if not uv:
+        print("  跳过：未找到 uv。请先安装（winget install astral-sh.uv）后重跑。")
+        return
+
+    try:
+        listing = subprocess.run([uv, "tool", "list"], capture_output=True, text=True, timeout=30)
+        installed = parse_uv_tool_list(listing.stdout)
+    except Exception as e:
+        print(f"  跳过：uv tool list 失败（{e}）。")
+        return
+
+    if BROWSER_HARNESS not in installed:
+        if offline_mode():
+            print("  跳过：PI_OFFLINE 已启用，且 browser-harness 尚未安装。")
+            return
+        print(f"  首次安装 {BROWSER_HARNESS}（uv 自管 Python {BROWSER_HARNESS_PYTHON}）...")
+        result = run([uv, "tool", "install", "--python", BROWSER_HARNESS_PYTHON, BROWSER_HARNESS])
+        if result.returncode != 0:
+            print(f"  跳过：安装失败（退出码 {result.returncode}），不影响其它内容。")
+            return
+    elif offline_mode():
+        print(f"  {BROWSER_HARNESS} {installed[BROWSER_HARNESS]}（PI_OFFLINE 已启用，跳过升级检查）")
+    else:
+        print(f"  升级 {BROWSER_HARNESS}（当前 {installed[BROWSER_HARNESS]}）...")
+        result = run([uv, "tool", "upgrade", BROWSER_HARNESS])
+        if result.returncode != 0:
+            print(f"  提示：升级失败（退出码 {result.returncode}），用现有版本继续生成 SKILL.md。")
+
+    harness = browser_harness_bin(uv)
+    if not harness:
+        print(f"  跳过：未定位到 {BROWSER_HARNESS} 可执行文件，无法生成 SKILL.md。")
+        return
+
+    try:
+        result = subprocess.run([str(harness), "skill"], capture_output=True, text=True, timeout=120)
+    except Exception as e:
+        print(f"  跳过：`{BROWSER_HARNESS} skill` 执行失败（{e}）。")
+        return
+    body = result.stdout
+    if result.returncode != 0 or not body.strip():
+        print(f"  跳过：`{BROWSER_HARNESS} skill` 无有效输出（退出码 {result.returncode}）。")
+        return
+
+    overrides_path = REPO_ROOT / "skills" / BROWSER_HARNESS / "skill-overrides.json"
+    if overrides_path.exists():
+        try:
+            overrides = json.loads(overrides_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            print(f"  警告：{overrides_path.name} 解析失败（{e}），保留官方原始 frontmatter。")
+            overrides = {}
+        if overrides:
+            body = apply_skill_overrides(body, overrides)
+    else:
+        print(f"  提示：缺少 {overrides_path.name}，未应用 name/description 覆盖。")
+
+    repo_skill = REPO_ROOT / "skills" / BROWSER_HARNESS / "SKILL.md"
+    repo_skill.parent.mkdir(parents=True, exist_ok=True)
+    changed = not repo_skill.exists() or repo_skill.read_text(encoding="utf-8") != body
+    repo_skill.write_text(body, encoding="utf-8")
+
+    global_skill = skills_dir / BROWSER_HARNESS / "SKILL.md"
+    global_skill.parent.mkdir(parents=True, exist_ok=True)
+    global_skill.write_text(body, encoding="utf-8")
+
+    print(f"  SKILL.md {'已更新' if changed else '无变化'}；仓库：{repo_skill}")
+    print(f"  已同步 → {global_skill}")
+
+
 # ── Skills ──
 
 def build_skill(skill_dir: Path) -> None:
@@ -565,7 +728,8 @@ def deploy_generic(skill_dir: Path, destination: Path, force: bool) -> None:
             return
         shutil.rmtree(destination)
 
-    exclude = {"tests", "node_modules", ".gitignore", "dist"}
+    # skill-overrides.json 是 sync 元数据（browser-harness 的 frontmatter 覆盖），不属于技能内容
+    exclude = {"tests", "node_modules", ".gitignore", "dist", "skill-overrides.json"}
     destination.mkdir(parents=True, exist_ok=True)
 
     for item in skill_dir.iterdir():
@@ -657,6 +821,10 @@ def main() -> None:
         help="检查/下载 grep、find 依赖的 rg、fd 到 <pi-agent-dir>/bin/（随 --extensions 自动执行；升级需交互确认）",
     )
     parser.add_argument(
+        "--tools", action="store_true",
+        help="安装/升级 browser-harness（uv tool）并同步其生成的 SKILL.md；升级不询问",
+    )
+    parser.add_argument(
         "--project-skills", action="store_true",
         help="将 project-skills/ 中的指定技能部署到目标项目",
     )
@@ -671,8 +839,8 @@ def main() -> None:
             parser.error("使用 --project-skills 时必须指定 --project-dir")
         if args.name is None:
             parser.error("使用 --project-skills 时必须指定 --name，不支持安装全部项目级技能")
-        if args.skills or args.context or args.extensions or args.binaries:
-            parser.error("--project-skills 不能与 --skills、--context、--extensions 或 --binaries 组合使用")
+        if args.skills or args.context or args.extensions or args.binaries or args.tools:
+            parser.error("--project-skills 不能与 --skills、--context、--extensions、--binaries 或 --tools 组合使用")
         args.project_dir = args.project_dir.expanduser().resolve()
         if not args.project_dir.is_dir():
             parser.error(f"目标项目目录不存在或不是目录：{args.project_dir}")
@@ -681,7 +849,7 @@ def main() -> None:
 
     # 不加选择参数时安装全局技能、context 文件和扩展；项目级技能必须显式指定
     install_all = not (
-        args.skills or args.context or args.extensions or args.binaries or args.project_skills
+        args.skills or args.context or args.extensions or args.binaries or args.tools or args.project_skills
     )
 
     check_prerequisites()
@@ -698,6 +866,10 @@ def main() -> None:
 
     if install_all or args.extensions:
         deploy_extensions(args.pi_agent_dir, args.force)
+
+    # browser-harness 段先于技能部署执行，生成的 SKILL.md 在同一次 sync 中即可生效
+    if install_all or args.tools:
+        deploy_browser_harness(args.skills_dir)
 
     if install_all or args.skills:
         deploy_skills(REPO_ROOT / "skills", args.skills_dir, args.name, args.force)

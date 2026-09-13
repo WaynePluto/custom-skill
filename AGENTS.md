@@ -13,7 +13,7 @@
 ## 开发规则
 
 - 除非用户明确要求，不要把技能复制、链接或安装到 `~/.agents/skills/`、`~/.pi/agent/skills/` 等全局目录。
-- 优先使用 Skill 加本地 CLI 脚本，不为简单能力引入 MCP Server 或常驻后台服务。
+- 优先使用 Skill 加本地 CLI 脚本，不为简单能力引入 MCP Server 或常驻后台服务；CLI 工具内部为复用连接而自带的辅助进程（如 browser-harness 的 daemon）不在此列。
 - Skill 负责触发条件和工作流；确定性的浏览器访问、解析和校验逻辑放在脚本中，不堆进 `SKILL.md`。
 - Skill 的 `description` 必须准确说明何时使用和何时不使用，避免过度触发。
 - 脚本输出应结构化、可截断，不把大段无关内容送入模型上下文。
@@ -22,9 +22,9 @@
 
 ## 本地浏览器约定
 
-- 浏览器默认自动发现，顺序为 Chrome 优先、Edge 降级。
-- 显式浏览器路径只能通过可选命令行参数覆盖；不得读取自定义浏览器路径或浏览器偏好环境变量。
-- 自动化使用独立的临时 Profile；除非用户明确要求，不读取个人浏览器 Profile、Cookie 或登录状态。
+- 网页交互与浏览器自动化统一由 browser-harness CLI 提供，仅支持 Chrome；由 `pnpm sync` 负责安装与升级，`skills/browser-harness/SKILL.md` 由 CLI 生成、`skill-overrides.json` 审定 frontmatter，仓库副本进 Git 以便审查版本间变化。
+- browser-harness 按用户明确选择直接使用真实 Chrome Profile 与登录态（首次需在 `chrome://inspect/#remote-debugging` 勾选允许）；登录态下的敏感操作（支付、删除、授权类）必须先向用户确认。
+- local-web-search 自带脚本仍使用隔离临时 Profile，浏览器按 Chrome 优先、Edge 降级自动发现；显式浏览器路径只能通过可选命令行参数覆盖，不得读取自定义浏览器路径或浏览器偏好环境变量。
 - 浏览器实现应支持超时、清晰错误、资源释放和输出大小限制。
 
 ## 验证要求

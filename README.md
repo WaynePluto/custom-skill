@@ -6,7 +6,8 @@
 
 - **Python >= 3.10**
 - **Node.js >= 20**（部分技能需要）
-- **本机安装的 Chrome 或 Edge**（浏览器类技能需要）
+- **uv**（browser-harness 需要；没有时 sync 会跳过该段）
+- **本机安装的 Chrome 或 Edge**（浏览器类技能需要；browser-harness 仅支持 Chrome）
 - **Windows + PowerShell 7（pwsh）**：项目中的脚本、SKILL 命令示例和 context 文件默认面向 Windows 上的 PowerShell 7 编写，Shell 命令使用 pwsh 7 语法；在其他 OS / Shell 下使用时需自行改写相应命令
 
 ## 快速开始
@@ -24,6 +25,7 @@ python scripts/install.py
 - Context：将 `context/` 下的 `APPEND_SYSTEM.md` 部署到 `~/.pi/agent/`
 - 二进制：确保 `grep`、`find` 依赖的 `rg`、`fd` 存在于 `~/.pi/agent/bin/`
 - 扩展：将 `extensions/` 下的 Pi 扩展部署到 `~/.pi/agent/extensions/`
+- browser-harness：通过 uv 安装/升级 CLI，并把生成的 SKILL.md 同步到仓库与全局技能目录
 
 `project-skills/` 中的项目级技能不会被默认安装，必须显式指定技能名称和目标项目。
 
@@ -49,7 +51,7 @@ python scripts/install.py --force
 
 ### 只安装指定类别
 
-不加选择参数时全部安装；加 `--skills`、`--context`、`--extensions`、`--binaries` 则只安装对应类别（可组合）：
+不加选择参数时全部安装；加 `--skills`、`--context`、`--extensions`、`--binaries`、`--tools` 则只安装对应类别（可组合）：
 
 ```shell
 # 只更新 context 文件
@@ -63,6 +65,9 @@ python scripts/install.py --extensions --force
 
 # 只检查二进制依赖，有新版时询问是否升级
 python scripts/install.py --binaries
+
+# 只安装/升级 browser-harness 并同步其 SKILL.md（升级不询问）
+python scripts/install.py --tools
 ```
 
 ### 自定义安装目录
@@ -85,6 +90,7 @@ pnpm test             # 跑全部静态测试（Node + Python）
 
 | 技能 | 作用域 | 说明 |
 |---|---|---|
+| [browser-harness](skills/browser-harness/) | 全局 | 通过 browser-harness CLI 以 CDP 控制本机真实 Chrome；SKILL.md 由 CLI 生成，`sync` 负责升级 |
 | [local-web-search](skills/local-web-search/) | 全局 | 使用本机 Chrome/Edge 进行实时网络搜索、网页阅读和多来源核实 |
 | [pixel2ase](project-skills/pixel2ase/) | 项目级 | 将 AI 生成的像素风图片转换为原生分辨率 PNG 和 indexed `.aseprite` 工程 |
 
@@ -253,6 +259,20 @@ python -m unittest discover -s tests -p 'test_*.py'
 ```
 
 开发阶段的 `node_modules/`、`dist/`、lock 文件均不纳入 Git。
+
+### Browser harness
+
+browser-harness 以 `uv tool` 形式安装（uv 自管 Python 3.12），`skills/browser-harness/SKILL.md` 不是手写的，而是每次 sync 由 `browser-harness skill` 重新生成：仓库副本进 Git（可审查版本间工作流变化），全局副本同步刷新。frontmatter 的 `name` / `description` 由 `skills/browser-harness/skill-overrides.json` 覆盖（官方默认 "Always use ..." 会过度触发），`skill-overrides.json` 属于 sync 元数据，不会随技能部署。
+
+| 情况 | 行为 |
+|---|---|
+| 未安装 uv | 提示安装命令后跳过该段，不中断安装 |
+| uv 里没有 browser-harness | `uv tool install --python 3.12 browser-harness` |
+| 已安装 | `uv tool upgrade browser-harness` 直接升级，**不询问**（与 rg/fd 不同，sync 即升级） |
+| `PI_OFFLINE=1` | 未安装则跳过；已安装则跳过升级，仍用现有版本重新生成 SKILL.md |
+| 升级/生成失败 | 只跳过本段，不影响其它内容 |
+
+首次使用还需一次性手动动作：在 Chrome 打开 `chrome://inspect/#remote-debugging` 勾选允许远程调试，之后 browser-harness 即可连接真实 Chrome Profile。
 
 ## 手动构建（不安装）
 
